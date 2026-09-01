@@ -223,7 +223,7 @@ export function InvestorDataRoom() {
 // ============================================================
 // Secure Access Screen
 // ============================================================
-type AccessMode = 'menu' | 'token' | 'request' | 'return-login' | 'admin-login';
+type AccessMode = 'menu' | 'token' | 'request' | 'return-login' | 'return-otp' | 'admin-login';
 
 function SecureAccessScreen({
   onInvestorActivated,
@@ -239,6 +239,9 @@ function SecureAccessScreen({
   const [passphrase, setPassphrase] = useState('');
   const [email, setEmail] = useState('');
   const [returnPassphrase, setReturnPassphrase] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [otpInvestorId, setOtpInvestorId] = useState('');
+  const [otpResent, setOtpResent] = useState(false);
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPass, setAdminPass] = useState('');
   const [reqForm, setReqForm] = useState({ name: '', email: '', phone: '', organisation: '', role: '', message: '' });
@@ -271,10 +274,46 @@ function SecureAccessScreen({
       const data = await apiCall('drm-login', {
         method: 'POST',
         body: JSON.stringify({ email, passphrase: returnPassphrase }),
+      }) as { ok: boolean; otpRequired: boolean; investorId: string };
+      setOtpInvestorId(data.investorId);
+      setOtpCode('');
+      setOtpResent(false);
+      setMode('return-otp');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Login failed.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      const data = await apiCall('drm-login', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'verify-otp', investorId: otpInvestorId, code: otpCode }),
       }) as { ok: boolean; investor: Investor; sessionToken: string; sessionId: string };
       onReturnLogin(data.sessionToken);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed.');
+      setError(err instanceof Error ? err.message : 'Incorrect or expired code.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      await apiCall('drm-login', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'resend-otp', investorId: otpInvestorId }),
+      });
+      setOtpResent(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not resend code.');
     } finally {
       setLoading(false);
     }
@@ -423,6 +462,36 @@ function SecureAccessScreen({
                 {loading ? 'Logging in...' : 'Log in'} <ArrowRight size={16} />
               </button>
               <button type="button" onClick={() => { setMode('menu'); setError(''); }} style={{ background: 'none', border: 'none', color: 'var(--nf-text-tertiary)', fontSize: '0.8125rem', cursor: 'pointer', padding: '4px' }}>Back</button>
+            </form>
+          )}
+
+          {mode === 'return-otp' && (
+            <form onSubmit={handleVerifyOtp} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--nf-space-5)' }}>
+              <p style={{ fontSize: '0.875rem', color: 'var(--nf-text-secondary)', margin: 0 }}>
+                We've emailed a code to {email}. Enter it below to finish logging in.
+              </p>
+              <div>
+                <label style={labelStyle}>Sign-in code</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                  style={inputStyle}
+                  placeholder="6-digit code"
+                  autoFocus
+                />
+              </div>
+              {error && <p style={{ fontSize: '0.875rem', color: 'var(--nf-negative)' }}>{error}</p>}
+              {otpResent && !error && <p style={{ fontSize: '0.8125rem', color: 'var(--nf-cyan)' }}>A new code has been sent.</p>}
+              <button type="submit" disabled={loading || otpCode.length !== 6} style={{ ...btnStyle, opacity: loading || otpCode.length !== 6 ? 0.4 : 1, cursor: loading || otpCode.length !== 6 ? 'not-allowed' : 'pointer' }}>
+                {loading ? 'Verifying...' : 'Verify and log in'} <ArrowRight size={16} />
+              </button>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <button type="button" onClick={handleResendOtp} disabled={loading} style={{ background: 'none', border: 'none', color: 'var(--nf-cyan)', fontSize: '0.8125rem', cursor: loading ? 'not-allowed' : 'pointer', padding: '4px' }}>Resend code</button>
+                <button type="button" onClick={() => { setMode('return-login'); setError(''); setOtpCode(''); }} style={{ background: 'none', border: 'none', color: 'var(--nf-text-tertiary)', fontSize: '0.8125rem', cursor: 'pointer', padding: '4px' }}>Back</button>
+              </div>
             </form>
           )}
 

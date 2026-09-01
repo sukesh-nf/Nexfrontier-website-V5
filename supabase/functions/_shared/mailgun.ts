@@ -51,6 +51,28 @@ export async function sendMailgunEmail(opts: {
   }
 }
 
+export function otpEmailHtml(opts: { name: string; code: string }): string {
+  return emailTemplate({
+    eyebrow: 'NexFrontier · Investor Data Room',
+    heading: 'Your sign-in code',
+    bodyHtml: `
+      <p style="color:#94a3b8;font-size:14px;line-height:1.7;margin:0 0 20px">Hi ${opts.name},</p>
+      <p style="color:#94a3b8;font-size:14px;line-height:1.7;margin:0 0 20px">
+        Enter this code to finish signing in to the NexFrontier Investor Data Room.
+      </p>
+      <div style="background:#0f172a;border:1px solid #1e293b;border-radius:8px;padding:20px;margin:0 0 20px;text-align:center">
+        <div style="color:#22d3ee;font-size:32px;font-weight:700;letter-spacing:0.2em;font-family:monospace">${opts.code}</div>
+      </div>
+      <p style="color:#94a3b8;font-size:14px;line-height:1.7;margin:0 0 20px">
+        This code expires in <strong style="color:#e2e8f0">10 minutes</strong> and can only be used once.
+      </p>
+      <p style="color:#64748b;font-size:13px;line-height:1.6;margin:0">
+        If you didn't just try to sign in, you can safely ignore this email — your account is still secure.
+      </p>
+    `,
+  });
+}
+
 // Shared dark-themed wrapper matching the site's existing email branding
 // (same styling already used in production by send-email/index.ts).
 export function emailTemplate(opts: {
