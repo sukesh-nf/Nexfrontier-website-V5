@@ -1,5 +1,37 @@
 // verify_jwt: false (internal admin-session-token auth, not JWT)
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
+import { sendMailgunEmail, emailTemplate } from '../_shared/mailgun.ts';
+
+const SITE_URL = 'https://nexfrontierlogic.nz';
+
+function investorInviteEmailHtml(opts: { name: string; token: string; isResend: boolean }): string {
+  return emailTemplate({
+    eyebrow: 'NexFrontier · Investor Data Room',
+    heading: opts.isResend ? 'Your new access details' : 'Your Investor Data Room access',
+    bodyHtml: `
+      <p style="color:#94a3b8;font-size:14px;line-height:1.7;margin:0 0 20px">Hi ${opts.name},</p>
+      <p style="color:#94a3b8;font-size:14px;line-height:1.7;margin:0 0 20px">
+        ${opts.isResend
+          ? "Here's a new access token for the NexFrontier Investor Data Room."
+          : "You've been granted access to the NexFrontier Investor Data Room."}
+        Use the token below to activate your access and set a passphrase.
+      </p>
+      <div style="background:#0f172a;border:1px solid #1e293b;border-radius:8px;padding:20px;margin:0 0 20px;text-align:center">
+        <div style="color:#64748b;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;margin:0 0 8px">Your access token</div>
+        <div style="color:#22d3ee;font-size:16px;font-weight:700;font-family:monospace;letter-spacing:0.02em;word-break:break-all">${opts.token}</div>
+      </div>
+      <p style="color:#94a3b8;font-size:14px;line-height:1.7;margin:0 0 20px">
+        Go to <a href="${SITE_URL}/investor-data-room" style="color:#22d3ee">${SITE_URL}/investor-data-room</a>,
+        enter this token, and choose a passphrase. This token expires in <strong style="color:#e2e8f0">48 hours</strong>
+        and can only be used once. After activation, your access does not expire — you'll simply log in again
+        with your email and passphrase whenever you return.
+      </p>
+      <p style="color:#64748b;font-size:13px;line-height:1.6;margin:0">
+        If you weren't expecting this, you can safely ignore this email.
+      </p>
+    `,
+  });
+}
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -464,12 +496,21 @@ Deno.serve(async (req: Request) => {
         event_detail: { source, request_id: requestId },
       });
 
+      const emailResult = await sendMailgunEmail({
+        to: email,
+        subject: 'Your NexFrontier Investor Data Room access',
+        html: investorInviteEmailHtml({ name, token: inviteToken, isResend: false }),
+      });
+
       return new Response(
         JSON.stringify({
           ok: true,
-          message: 'Invitation sent successfully.',
+          message: emailResult.sent
+            ? 'Invitation sent successfully.'
+            : 'Invitation created, but the email could not be sent — share the token manually.',
           inviteToken,
           investorId,
+          emailSent: emailResult.sent,
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
@@ -487,6 +528,12 @@ Deno.serve(async (req: Request) => {
           { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
         );
       }
+
+      const { data: investorRecord } = await supabase
+        .from('drm_investors')
+        .select('name, email')
+        .eq('id', investorId)
+        .maybeSingle();
 
       await supabase
         .from('drm_access_tokens')
@@ -517,11 +564,28 @@ Deno.serve(async (req: Request) => {
         event_detail: {},
       });
 
+      let emailSent = false;
+      if (investorRecord?.email) {
+        const emailResult = await sendMailgunEmail({
+          to: investorRecord.email,
+          subject: 'Your new NexFrontier Investor Data Room access token',
+          html: investorInviteEmailHtml({
+            name: investorRecord.name ?? 'there',
+            token: inviteToken,
+            isResend: true,
+          }),
+        });
+        emailSent = emailResult.sent;
+      }
+
       return new Response(
         JSON.stringify({
           ok: true,
-          message: 'New invitation sent.',
+          message: emailSent
+            ? 'New invitation sent.'
+            : 'New token created, but the email could not be sent — share the token manually.',
           inviteToken,
+          emailSent,
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );

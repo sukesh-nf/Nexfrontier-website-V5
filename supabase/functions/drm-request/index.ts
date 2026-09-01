@@ -1,5 +1,6 @@
 // verify_jwt: true (platform-level JWT gate enabled)
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
+import { sendMailgunEmail, emailTemplate } from '../_shared/mailgun.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -61,6 +62,27 @@ Deno.serve(async (req: Request) => {
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
+
+    // Best-effort acknowledgement email — the request is already saved above,
+    // so a Mailgun failure here should never surface as an error to the requester.
+    await sendMailgunEmail({
+      to: email,
+      subject: "We've received your NexFrontier Investor Brief request",
+      html: emailTemplate({
+        eyebrow: 'NexFrontier · Investor Brief',
+        heading: 'Request received',
+        bodyHtml: `
+          <p style="color:#94a3b8;font-size:14px;line-height:1.7;margin:0 0 20px">Hi ${name},</p>
+          <p style="color:#94a3b8;font-size:14px;line-height:1.7;margin:0 0 20px">
+            Thanks for your interest in NexFrontier. Your request for the Investor Brief has been received.
+            A member of the NexFrontier team will review it and contact you with next steps.
+          </p>
+          <p style="color:#64748b;font-size:13px;line-height:1.6;margin:0">
+            If you weren't expecting this, you can safely ignore this email.
+          </p>
+        `,
+      }),
+    });
 
     return new Response(
       JSON.stringify({
