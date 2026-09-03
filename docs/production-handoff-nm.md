@@ -1,7 +1,7 @@
 # NexFrontier — Production Handoff & Launch Runbook for NM
 
 **Date:** 2026-09-03
-**Status:** Founder-reviewed production handoff. Site not yet published.
+**Status:** Founder-review candidate. Site not yet published.
 
 ---
 
@@ -13,9 +13,16 @@
 | Investor product (Track B) | PASS |
 | Production readiness | NOT YET COMPLETE |
 
-Remaining production actions:
+### Pre-launch cleanup completed
+
+- `@netlify/plugin-nextjs` dependency removed from `package.json` and lockfile
+- Temporary QA Edge Functions `drm-storage-cleanup` and `drm-bucket-delete` deleted from Supabase
+- Final Edge Function inventory: 13 production-required functions only
+
+### Remaining production actions
+
 - Founder personally sets/confirms final Super Admin passphrase
-- Production email delivery configuration
+- Production email delivery implementation + configuration
 - Netlify production environment/deployment
 - Hosted regression QA
 
@@ -34,9 +41,7 @@ Remaining production actions:
 | Hosting | Netlify serves static output from `out/` |
 | Backend | Supabase (provisioned project) |
 
-**Netlify configuration:** `netlify.toml` defines build command (`npm run build`), publish directory (`out`), and redirect rules. No Netlify Next.js runtime adapter or server-side plugin is required for this static-export architecture.
-
-**ARCHITECTURE DEFECT FOUND:** `package.json` currently lists `@netlify/plugin-nextjs` as a dependency (`^5.15.13`). This plugin is not required for a pure static-export deployment and may introduce unintended server-side runtime behavior. It should be removed from production dependencies before launch. This is a dependency cleanup item, not a product-code change. No code change made in this task.
+**Netlify configuration:** `netlify.toml` defines build command (`npm run build`), publish directory (`out`), and redirect rules. No Netlify Next.js runtime adapter or server-side plugin is required or present.
 
 ---
 
@@ -59,39 +64,24 @@ NO SECRET VALUES ARE TO BE COMMITTED TO THE REPOSITORY OR EXPOSED IN STATIC/CLIE
 
 The local `.env` file is for development only. Do not copy it wholesale to production. Production secrets must be configured through the hosting platform's secure environment variable interface.
 
-### NETLIFY / PUBLIC CLIENT ENV (safe for browser bundle)
+### Authoritative Environment Variable Table
 
-| Variable | Purpose |
-|---|---|
-| `NEXT_PUBLIC_SITE_URL` | Canonical production domain (e.g., `https://nexfrontierlogic.nz`) |
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project public URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon/public key (safe for client) |
+| Variable / Secret | Location | Required at launch? | Purpose | Secret? |
+|---|---|---|---|---|
+| `NEXT_PUBLIC_SITE_URL` | Netlify env | Yes | Canonical production domain (e.g., `https://nexfrontierlogic.nz`) | No (public) |
+| `NEXT_PUBLIC_SUPABASE_URL` | Netlify env | Yes | Supabase project public URL | No (public) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Netlify env | Yes | Supabase anon/public key (safe for client) | No (public) |
+| `SITE_INDEXING_ENABLED` | Netlify env | Yes (set to `true` only after launch verification) | Controls search engine indexing | No (server-only) |
+| `PREVIEW_MODE` | Netlify env | No (QA/preview builds only) | Shows unpublished Spokes/video pages for preview. Do not set in production. | No (server-only) |
+| `SUPABASE_URL` | Supabase runtime | Auto-configured | Edge Function Supabase access | Yes (auto) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase runtime | Auto-configured | Edge Function privileged DB access | Yes (auto) |
+| `SUPABASE_ANON_KEY` | Supabase runtime | Auto-configured | Edge Function public DB access | Yes (auto) |
+| `SUPABASE_DB_URL` | Supabase runtime | Auto-configured | Direct DB connection | Yes (auto) |
+| Email provider API key | Supabase Edge Function secrets | Yes (for production email) | Email sending authentication | Yes (NM must configure) |
+| Email sender address | Supabase Edge Function secrets | Yes (for production email) | From-address for outgoing emails | No (but not public) |
+| Email sender domain | Supabase Edge Function secrets | Yes (for production email) | Sender domain identity | No (but not public) |
 
-### NETLIFY SERVER/BUILD ENV
-
-| Variable | Purpose |
-|---|---|
-| `SITE_INDEXING_ENABLED` | Set to `true` only when ready for search engine indexing. Default: unset/false. |
-
-### SUPABASE EDGE FUNCTION SECRETS (configured in Supabase project, not Netlify)
-
-| Secret | Purpose | Currently configured? |
-|---|---|---|
-| `SUPABASE_URL` | Auto-configured by Supabase runtime | Yes (auto) |
-| `SUPABASE_SERVICE_ROLE_KEY` | Auto-configured by Supabase runtime | Yes (auto) |
-| `SUPABASE_ANON_KEY` | Auto-configured by Supabase runtime | Yes (auto) |
-| `SUPABASE_DB_URL` | Auto-configured by Supabase runtime | Yes (auto) |
-| Email provider API key | For production email delivery | NOT YET CONFIGURED |
-| Email sender address | For production email delivery | NOT YET CONFIGURED |
-| Email sender domain | For production email delivery | NOT YET CONFIGURED |
-
-### SERVER-ONLY VARIABLES NOT REQUIRED IN NETLIFY
-
-| Variable | Status |
-|---|---|
-| `PREVIEW_MODE` | Used only in `src/config/site.ts` for QA/preview builds of unpublished Spokes/video pages. Not required for production deployment. Do not set in production unless conducting a preview build. |
-| `SUPABASE_SERVICE_ROLE_KEY` | Auto-configured in Supabase Edge Function runtime. Must NOT be placed in Netlify env or client bundle. |
-| `SUPABASE_DB_URL` | Auto-configured in Supabase runtime. Must NOT be placed in Netlify env or client bundle. |
+**Supabase auto-configured secrets** (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`, `SUPABASE_DB_URL`) are injected automatically by the Supabase Edge Function runtime. They must NOT be placed in Netlify environment variables or client-side code.
 
 ---
 
@@ -99,18 +89,18 @@ The local `.env` file is for development only. Do not copy it wholesale to produ
 
 ### Current state: MANUAL / TEST DELIVERY ONLY
 
-No production email provider is configured. Both investor invitation and admin passphrase reset use a DEV manual delivery path — the activation/reset URL is returned in the API response for the admin to share manually. This path is gated behind `is_test_investor = true` for investor invitations, and behind bootstrap-secret authentication for admin reset.
+No production email provider is configured. No email-sending code (SMTP, Resend, SendGrid, or otherwise) exists in any Edge Function. Both investor invitation and admin passphrase reset use a DEV manual delivery path — the activation/reset URL is returned in the API response for the admin to share manually.
 
 ### Email implementation state per lifecycle event:
 
 | Event | Code status | Configuration status |
 |---|---|---|
-| Investor approval/activation | IMPLEMENTATION REQUIRED — no email-sending code exists; DEV manual delivery only | Provider config missing |
-| Direct invitation | IMPLEMENTATION REQUIRED — same as above | Provider config missing |
-| Re-invitation | IMPLEMENTATION REQUIRED — same as above | Provider config missing |
-| Admin passphrase reset | IMPLEMENTATION REQUIRED — DEV manual delivery only | Provider config missing |
+| Investor approval/activation | IMPLEMENTATION REQUIRED + PROVIDER CONFIG REQUIRED | No email code exists; DEV manual delivery only |
+| Direct invitation | IMPLEMENTATION REQUIRED + PROVIDER CONFIG REQUIRED | Same as above |
+| Re-invitation | IMPLEMENTATION REQUIRED + PROVIDER CONFIG REQUIRED | Same as above |
+| Admin passphrase reset | IMPLEMENTATION REQUIRED + PROVIDER CONFIG REQUIRED | DEV manual delivery only |
 
-No email-sending code (SMTP, Resend, SendGrid, or otherwise) exists in any Edge Function. Production email implementation is required for all four events above.
+NM must understand: this is actual production engineering work, not merely entering an API key. Email-sending code must be written and integrated into the Edge Functions, in addition to provider configuration.
 
 ### Production requirements:
 
@@ -125,7 +115,25 @@ No email-sending code (SMTP, Resend, SendGrid, or otherwise) exists in any Edge 
 
 ---
 
-## 6. Founder Super Admin Action
+## 6. Critical Placeholder NDA / Email Interaction
+
+Two separate gates control non-test investor issuance:
+
+### NDA gate
+- Current placeholder NDA (`v1-PLACEHOLDER`, `is_current = true`) blocks non-test investor token issuance
+- This is a controlled technical gate and a founder-controlled content/legal decision
+- Founder-controlled NDA state determines when the non-test issuance gate may intentionally change
+- NM must not change the NDA
+
+### Email gate
+- Production email implementation and provider are absent
+- Even once email is implemented, non-test investor issuance will still remain blocked while the placeholder NDA gate remains current
+
+**Do not imply email configuration alone enables live external investors. Both gates must be resolved.**
+
+---
+
+## 7. Founder Super Admin Action
 
 **FOUNDER FINAL PASS-PHRASE IS A FOUNDER-CONTROLLED ACTION.**
 
@@ -138,7 +146,7 @@ No email-sending code (SMTP, Resend, SendGrid, or otherwise) exists in any Edge 
 ### Production process:
 1. Frontend is deployed and reachable
 2. NM/operator verifies the reset flow is operational
-3. If needed, an authorised operator initiates a fresh reset request/token through the protected reset mechanism (requires bootstrap secret, stored as hash in `drm_bootstrap_config` table)
+3. An authorised operator initiates a fresh reset request/token through the protected reset mechanism (requires operator credential — bootstrap secret stored as hash in `drm_bootstrap_config` table, verified by `drm-admin-reset` Edge Function)
 4. Founder opens the hosted reset flow at `/investor-admin/reset-passphrase`
 5. Founder personally chooses the final passphrase (min 12 chars, weak passphrases rejected)
 6. Reset invalidates all existing admin sessions
@@ -146,12 +154,12 @@ No email-sending code (SMTP, Resend, SendGrid, or otherwise) exists in any Edge 
 8. NM never chooses or receives the founder's passphrase
 
 ### Distinction:
-- **FIRST-ADMIN BOOTSTRAP:** One-time creation of the first Super Admin. Self-disabled after first admin exists. Cannot be reused.
-- **ADMIN PASS-PHRASE RESET:** Ongoing operator-initiated flow to reset an existing admin's passphrase. Requires bootstrap secret verification. Separate from bootstrap.
+- **FIRST-ADMIN BOOTSTRAP:** One-time creation of the first Super Admin. Self-disabled after first admin exists. Cannot be reused. Not a normal operational reset mechanism.
+- **EXISTING-ADMIN PASS-PHRASE RESET:** Current operational reset process. Requires authorised operator credential (bootstrap secret) to initiate. Separate from first-admin bootstrap.
 
 ---
 
-## 7. Investor Lifecycle
+## 8. Investor Lifecycle
 
 ### Request-level states (`drm_investor_requests.status`)
 
@@ -179,7 +187,7 @@ No email-sending code (SMTP, Resend, SendGrid, or otherwise) exists in any Edge 
 
 ---
 
-## 8. Token & Session Security
+## 9. Token & Session Security
 
 | Property | Value |
 |---|---|
@@ -201,7 +209,7 @@ No email-sending code (SMTP, Resend, SendGrid, or otherwise) exists in any Edge 
 
 ---
 
-## 9. NDA
+## 10. NDA
 
 | Property | Value |
 |---|---|
@@ -225,7 +233,7 @@ NM must understand the consequence: real investor issuance remains blocked until
 
 ---
 
-## 10. Data Room Content
+## 11. Data Room Content
 
 ### Private route shells
 
@@ -264,7 +272,7 @@ ROUTE EXISTENCE DOES NOT IMPLY CONTENT AVAILABILITY.
 
 ---
 
-## 11. Private Content Delivery Architecture
+## 12. Private Content Delivery Architecture
 
 Private Data Room content is NEVER embedded in static HTML/JS.
 
@@ -285,7 +293,7 @@ Every failure at any step fails closed — no private body content is returned.
 
 ---
 
-## 12. Data Room Version & Publication Semantics
+## 13. Data Room Version & Publication Semantics
 
 ### DRAFT VERSION
 - `published_at IS NULL`
@@ -311,13 +319,13 @@ For the exact approved version:
 `is_published` / current-live semantics must not be confused with "was historically published". Do not overwrite or mutate a previously published version's content. The `current_published_version_id` pointer moves to the new version; the old version remains immutable in version history.
 
 ### SIX CORE PAGES
-All six approved core pages are intended to publish together only after explicit founder approval. Do not publish any in this task.
+All six approved core pages are intended to publish together only after explicit founder approval. For each approved page, publish only the exact founder-approved draft version.
 
 ---
 
-## 13. Edge Function Inventory
+## 14. Edge Function Inventory
 
-### PRODUCTION-REQUIRED EDGE FUNCTIONS (13)
+13 Edge Functions currently deployed (verified post-cleanup):
 
 | Slug | verify_jwt | Purpose | Category |
 |---|---|---|---|
@@ -335,18 +343,11 @@ All six approved core pages are intended to publish together only after explicit
 | `market-enquiry` | true | Public market enquiry form submission | Public form |
 | `leadership-pulse` | true | Public leadership pulse survey submission | Public form |
 
-### TEMPORARY FUNCTIONS TO REMOVE/DISABLE BEFORE PRODUCTION (2)
-
-| Slug | Purpose | Status |
-|---|---|---|
-| `drm-storage-cleanup` | Storage cleanup utility created during QA/security remediation | Currently deployed and ACTIVE. Not required for normal production operation. Remove or disable before launch. |
-| `drm-bucket-delete` | Storage bucket deletion utility created during QA/security remediation | Currently deployed and ACTIVE. Not required for normal production operation. Remove or disable before launch. |
-
-Do not delete these in this task. NM should remove or disable them as part of production configuration.
+No temporary QA utility functions remain deployed.
 
 ---
 
-## 14. Storage
+## 15. Storage
 
 | Property | Value |
 |---|---|
@@ -355,11 +356,11 @@ Do not delete these in this task. NM should remove or disable them as part of pr
 | QA ZIP | None |
 | Future investor documents | Must use authenticated/controlled delivery |
 | Public `/storage/v1/object/public/...` | Must NEVER be used for private Data Room files |
-| Old migration `add_downloads_bucket_policies` | Historical migration record, not current production state. The bucket it referenced has been removed. Do not infer the bucket still exists from the migration filename. |
+| Old migration `add_downloads_bucket_policies` | Historical migration record, not current production state. The bucket it referenced has been removed. |
 
 ---
 
-## 15. Robots / Sitemap
+## 16. Robots / Sitemap
 
 ### Fail-closed logic:
 
@@ -379,7 +380,7 @@ Indexing is NOT automatically enabled by deployment. Both conditions must be exp
 
 ---
 
-## 16. Public Forms
+## 17. Public Forms
 
 ### Market Enquiry
 
@@ -390,7 +391,7 @@ Indexing is NOT automatically enabled by deployment. Both conditions must be exp
 | Validation | Server-side: name, email, organisation, enquiry required |
 | Persistence | Supabase table |
 | Error handling | Generic errors, no stack traces |
-| Email notification | Not configured (no email provider). Form submissions persist to database regardless. |
+| Email notification | Not configured. Form submissions persist to database regardless. |
 
 ### Leadership Pulse
 
@@ -403,16 +404,16 @@ Indexing is NOT automatically enabled by deployment. Both conditions must be exp
 | Error handling | Generic errors, no stack traces |
 | Email notification | Not configured. Form submissions persist to database regardless. |
 
-Form operation is independent of investor email infrastructure. Forms persist submissions to the database even without email configured.
+Form operation is independent of investor email infrastructure.
 
 ---
 
-## 17. Security Controls
+## 18. Security Controls
 
 | Control | Status |
 |---|---|
 | Public/private route separation | Static export generates shells; private content only via runtime Edge Function |
-| Runtime Data Room gate | `drm-content` checks: session → active (not suspended/revoked) → access_level ≥ 2 → NDA accepted → page published → current published version exists → content returned |
+| Runtime Data Room gate | `drm-content` checks: session → active (not suspended/revoked) → access_level >= 2 → NDA accepted → page published → current published version exists → content returned |
 | NDA gate | `drm-content` and `drm-nda` both check acceptance against current NDA version ID |
 | Lifecycle status checks | Every protected request re-checks investor `lifecycle_status` at request time |
 | Page publication check | `drm-content` only returns pages with `status = 'published'` AND non-null `current_published_version_id` |
@@ -432,7 +433,7 @@ Form operation is independent of investor email infrastructure. Forms persist su
 
 ---
 
-## 18. Known Accepted Non-Blockers
+## 19. Known Accepted Non-Blockers
 
 These are accepted as not blocking launch:
 
@@ -446,94 +447,118 @@ Email delivery, founder passphrase, and Data Room publication are NOT listed her
 
 ---
 
-## 19. Launch Runbook
+## 20. Final Launch Blockers
+
+### PRODUCT / ARCHITECTURE BLOCKERS
+
+NONE — all cleanup complete.
+
+### PRODUCTION IMPLEMENTATION / CONFIGURATION REQUIRED
+
+1. Production email sending implementation (code must be written)
+2. Email provider configuration
+3. Sender identity/domain configuration
+4. SPF / DKIM / DMARC DNS records
+5. Edge Function email secrets configured in Supabase
+6. Production Netlify environment variables set
+7. Netlify deployment
+
+### FOUNDER-CONTROLLED GATES
+
+1. Final Super Admin passphrase (personally set by founder)
+2. Data Room six-page publication approval
+3. NDA state / whether non-test issuance gate is changed
+4. Enable public indexing
+5. Final launch acceptance
+
+---
+
+## 21. Launch Runbook
 
 ### PHASE 1 — PRODUCTION CONFIGURATION
 
 1. Confirm canonical production domain
-2. Set Netlify public/build environment variables (`NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`)
+2. Set Netlify environment variables (`NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`)
 3. Configure production email provider
 4. Configure sender identity/domain
 5. Configure SPF
 6. Configure DKIM
 7. Configure DMARC
 8. Configure Supabase Edge Function email secrets
-9. Remove/disable temporary QA utility functions (`drm-storage-cleanup`, `drm-bucket-delete`) if still deployed
-10. Remove `@netlify/plugin-nextjs` from production dependencies (architecture defect — see Section 2)
+9. Implement email-sending code in `drm-admin` and `drm-admin-reset` Edge Functions
 
 ### PHASE 2 — DEPLOY FAIL-CLOSED
 
-11. Deploy static site to Netlify
-12. Keep `SITE_INDEXING_ENABLED` unset or `false`
-13. Verify production redirects (`/investor` → `/investor-proof` 301, `/market-evidence` → `/hyper-accelerating-markets` 301)
-14. Verify canonical-domain behavior
-15. Verify robots disallow / indexing remains off
-16. Verify sitemap contains zero public index entries while disabled
+10. Deploy static site to Netlify
+11. Keep `SITE_INDEXING_ENABLED` unset or `false`
+12. Verify production redirects (`/investor` -> `/investor-proof` 301, `/market-evidence` -> `/hyper-accelerating-markets` 301)
+13. Verify canonical-domain behavior
+14. Verify robots disallow / indexing remains off
+15. Verify sitemap contains zero public index entries while disabled
 
-### PHASE 3 — ADMIN ACCESS
+### PHASE 3 — FOUNDER ADMIN ACCESS
 
-17. Verify hosted admin/reset routes are reachable
-18. Issue fresh founder reset token if required (operator initiates via protected reset mechanism)
-19. Founder personally sets final passphrase
-20. Founder logs in successfully
-21. Verify admin session/logout/RBAC
+16. Verify hosted admin/reset routes are reachable
+17. Authorised operator initiates protected reset (requires operator credential)
+18. Founder personally sets final passphrase
+19. Founder logs in successfully
+20. Verify admin session/logout/RBAC
 
 ### PHASE 4 — PUBLIC FUNCTIONAL QA
 
-22. Verify Market Enquiry production submission
-23. Verify Leadership Pulse production submission
-24. Verify mobile/desktop public pages
-25. Verify no console/runtime errors
+21. Verify Market Enquiry production submission
+22. Verify Leadership Pulse production submission
+23. Verify mobile/desktop public pages
+24. Verify no console/runtime errors
 
-### PHASE 5 — INVESTOR FLOW QA (USE TEST INVESTOR ONLY)
+### PHASE 5 — QA INVESTOR JOURNEY (USE TEST INVESTOR ONLY)
 
-26. Use explicit QA/test investor only — do not use a real investor
-27. Public request submission
-28. Admin approval
-29. Verify `approved_awaiting_activation`
-30. Activation email delivery (or manual delivery for test investor)
-31. Activation
-32. Login
-33. Placeholder NDA gate (expected: NDA required)
-34. Data Room Home should remain empty because all topics are inactive
-35. Logout / return login
-36. Clean QA data if safe
+25. Use explicit QA/test investor only — do not use a real investor
+26. Public request submission
+27. Admin approval
+28. Verify `approved_awaiting_activation`
+29. Activation (manual delivery for test investor)
+30. Login
+31. Placeholder NDA gate (expected: NDA required)
+32. Data Room Home should remain empty because all topics are inactive
+33. Logout / return login
+34. Clean QA data if safe
 
-### PHASE 6 — PRIVATE CONTENT ACTIVATION
+### PHASE 6 — FOUNDER APPROVES PRIVATE CONTENT
 
-37. Founder explicitly approves publication of all six core pages
-38. Publish exact approved versions using locked version semantics (Section 12)
-39. Verify all six current published pointers are set
-40. Verify historical versions remain immutable
-41. Re-run QA investor access
-42. Verify only authorised published topics appear
+35. Founder explicitly approves publication of all six core pages
+36. Publish exact approved versions using locked version semantics (Section 13)
+37. Verify all six current published pointers are set
+38. Verify historical versions remain immutable
+39. Re-run QA investor access
+40. Verify only authorised published topics appear
 
 ### PHASE 7 — FINAL SECURITY QA
 
-43. Verify no static private content leakage
-44. Verify no public private-material storage
-45. Verify no service-role secrets in client/static output
-46. Verify investor/admin routes remain noindex
+41. Verify no static private content leakage
+42. Verify no public private-material storage
+43. Verify no service-role secrets in client/static output
+44. Verify investor/admin routes remain noindex
 
 ### PHASE 8 — INDEXING ENABLEMENT
 
-47. Founder explicitly approves enabling public indexing
-48. Set `SITE_INDEXING_ENABLED=true`
-49. Redeploy
-50. Verify robots now allow intended public crawling
-51. Verify sitemap includes only approved public indexable routes
-52. Verify redirect/private routes excluded
-53. Verify production canonicals/OG URLs use the canonical domain
+45. Founder explicitly approves enabling public indexing
+46. Set `SITE_INDEXING_ENABLED=true`
+47. Redeploy
+48. Verify robots now allow intended public crawling
+49. Verify sitemap includes only approved public indexable routes
+50. Verify redirect/private routes excluded
+51. Verify production canonicals/OG URLs use the canonical domain
 
 ### PHASE 9 — FINAL ACCEPTANCE
 
-54. Founder final hosted QA
-55. NM confirms infrastructure health
-56. Launch
+52. Founder final hosted QA
+53. NM confirms infrastructure health
+54. Launch
 
 ---
 
-## 20. Rollback / Failure Plan
+## 22. Rollback / Failure Plan
 
 | Failure scenario | Safe rollback action |
 |---|---|
@@ -545,9 +570,19 @@ Email delivery, founder passphrase, and Data Room publication are NOT listed her
 | Indexing enabled too early | Set `SITE_INDEXING_ENABLED=false`. Redeploy. Verify robots/sitemap fail-closed. |
 | Secret exposure | Rotate affected secret immediately. Invalidate related sessions/tokens where applicable. Redeploy. Verify static/client output clean. Document incident. |
 
+### Explicitly prohibited rollback actions:
+
+- Converting a real investor to `is_test_investor = true`
+- Bypassing NDA
+- Bypassing lifecycle status
+- Putting private files in public storage
+- Mutating historical published versions
+- Exposing reset/activation tokens
+- Enabling indexing as a troubleshooting shortcut
+
 ---
 
-## 21. Founder Actions
+## 23. Founder Actions
 
 1. Personally set/confirm final Super Admin passphrase via hosted reset flow
 2. Explicitly approve publication of six core Data Room pages
@@ -558,29 +593,28 @@ Founder does NOT perform: DNS configuration, email provider setup, Supabase secr
 
 ---
 
-## 22. NM Actions
+## 24. NM Actions
 
 1. Configure production domain and Netlify environment variables
-2. Configure email provider integration (provider, sender domain, API key)
-3. Set up SPF record for sender domain
-4. Set up DKIM for sender domain
-5. Set up DMARC policy for sender domain
-6. Configure Supabase Edge Function email secrets
-7. Remove/disable temporary QA utility functions (`drm-storage-cleanup`, `drm-bucket-delete`) if still deployed
-8. Remove `@netlify/plugin-nextjs` from production dependencies
-9. Deploy Netlify static export
-10. Support founder reset-flow (initiate reset token if required; do NOT choose or receive founder's passphrase)
-11. Hosted end-to-end regression QA
-12. Data Room publication execution after founder approval (using locked version semantics)
-13. Security verification
-14. Indexing enablement after founder approval
-15. Rollback readiness
+2. Implement production email-sending code in Edge Functions
+3. Configure email provider integration (provider, sender domain, API key)
+4. Set up SPF record for sender domain
+5. Set up DKIM for sender domain
+6. Set up DMARC policy for sender domain
+7. Configure Supabase Edge Function email secrets
+8. Deploy Netlify static export
+9. Support founder reset-flow (initiate reset token if required; do NOT choose or receive founder's passphrase)
+10. Hosted end-to-end regression QA
+11. Data Room publication execution after founder approval (using locked version semantics)
+12. Security verification
+13. Indexing enablement after founder approval
+14. Rollback readiness
 
 NM does NOT: choose founder credentials, make NDA/legal decisions, reinterpret product strategy, or relabel real investors as test investors.
 
 ---
 
-## 23. Post-Launch Enhancements
+## 25. Post-Launch Enhancements
 
 1. Branded OG image / social share-card system
 2. Enhanced admin analytics dashboard
