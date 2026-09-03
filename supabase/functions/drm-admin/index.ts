@@ -556,12 +556,16 @@ Deno.serve(async (req: Request) => {
 
       let investorId: string;
 
+      // Approval of a public request uses approved_awaiting_activation;
+      // direct invitation uses invited_awaiting_activation.
+      const lifecycleOnEntry = requestId ? 'approved_awaiting_activation' : 'invited_awaiting_activation';
+
       if (existing) {
         investorId = existing.id;
         await supabase
           .from('drm_investors')
           .update({
-            lifecycle_status: 'invited_awaiting_activation',
+            lifecycle_status: lifecycleOnEntry,
             invite_date: new Date().toISOString(),
             phone, source, organisation, role,
             relationship_owner_id: relationshipOwnerId,
@@ -575,7 +579,7 @@ Deno.serve(async (req: Request) => {
           .from('drm_investors')
           .insert({
             name, email, phone, source, organisation, role,
-            lifecycle_status: 'invited_awaiting_activation',
+            lifecycle_status: lifecycleOnEntry,
             invite_date: new Date().toISOString(),
             relationship_owner_id: relationshipOwnerId,
             is_test_investor: true,
@@ -755,11 +759,12 @@ Deno.serve(async (req: Request) => {
         issuance_reason: 'fresh_link',
       });
 
+      // Preserve the investor's lifecycle origin — do not convert between
+      // approved_awaiting_activation and invited_awaiting_activation.
       await supabase
         .from('drm_investors')
         .update({
           invite_date: new Date().toISOString(),
-          lifecycle_status: 'invited_awaiting_activation',
         })
         .eq('id', investorId);
 
