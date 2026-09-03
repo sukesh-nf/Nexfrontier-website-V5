@@ -122,11 +122,12 @@
 
 * { box-sizing: border-box; }
 
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; overflow-x: hidden; }
 
 body {
   margin: 0;
   min-width: 320px;
+  overflow-x: hidden;
   background: var(--nf-bg-primary);
   color: var(--nf-text-secondary);
   font-family: var(--nf-font-body);
@@ -5696,6 +5697,14 @@ section[id="request-investor-access"] {
   line-height: 1.5;
   color: #C4C9CD;
   margin: 0;
+}
+.nf-investor-stat-source {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #7E878D;
+  letter-spacing: 0.04em;
+  margin-top: 8px;
 }
 .nf-investor-stat-interpretation {
   border-left: 3px solid var(--nf-cyan);
