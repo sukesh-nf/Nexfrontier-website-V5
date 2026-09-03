@@ -13,7 +13,7 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: {
     default: `${siteConfig.name} — ${siteConfig.description}`,
-    template: `%s — ${siteConfig.name}`,
+    template: '%s',
   },
   description: siteConfig.description,
   // Global default: noindex. Individual pages opt in via pageMetadata()

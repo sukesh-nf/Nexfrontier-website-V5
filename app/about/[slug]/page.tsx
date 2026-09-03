@@ -3,8 +3,6 @@ import { pageMetadata } from '@/lib/page-metadata';
 import { Section, Container, Eyebrow } from '@/components/ui/primitives';
 import { personJsonLd } from '@/services/structured-data';
 import { TopBreadcrumb, BottomContextNav } from '@/components/ui/ContextNavigation';
-import { SHOULD_INDEX } from '@/config/site';
-import { getRouteStatus } from '@/config/navigation';
 import { teamMembers } from '@/data/content';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
@@ -18,13 +16,11 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug } = await params;
   const member = teamMembers.find((m) => m.slug === slug);
   const path = `/about/${slug}`;
-  const status = getRouteStatus(path);
-  const isIndexable = SHOULD_INDEX && status === 'published';
-  return {
+  return pageMetadata({
+    path,
     title: member ? `${member.name} | NexFrontier` : 'Team',
     description: member ? `${member.name}, ${member.role} at NexFrontier.` : 'NexFrontier team member.',
-    robots: isIndexable ? { index: true, follow: true } : { index: false, follow: false },
-  };
+  });
 }
 
 export default async function TeamProfilePage({ params }: { params: Promise<{ slug: string }> }) {

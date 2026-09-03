@@ -46,6 +46,17 @@ export function pageMetadata(input: PageMetadataInput): Metadata {
 
   if (SITE_URL) {
     metadata.alternates = { canonical: input.path };
+    metadata.openGraph = {
+      type: 'website',
+      title: input.title,
+      description: input.description,
+      url: input.path,
+    };
+    metadata.twitter = {
+      card: 'summary_large_image',
+      title: input.title,
+      description: input.description,
+    };
   }
 
   return metadata;

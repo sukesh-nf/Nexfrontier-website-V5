@@ -1,15 +1,15 @@
-import type { Metadata } from 'next';
 import Image from 'next/image';
 import { InvestorStickyNav } from '@/components/ui/InvestorStickyNav';
 import { InvestorBriefRequestForm } from '@/components/InvestorBriefRequestForm';
 import { Button, TextLink } from '@/components/ui/Button';
 import { ArrowRight } from 'lucide-react';
+import { pageMetadata } from '@/lib/page-metadata';
 
-export const metadata: Metadata = {
+export const metadata = pageMetadata({
+  path: '/investor-proof',
   title: 'Investment Case — NexFrontier',
   description: 'An emerging enterprise problem. A potential new category. An early investment opportunity.',
-  robots: { index: true, follow: true },
-};
+});
 
 export default function InvestorProofPage() {
   return (
@@ -83,15 +83,13 @@ export default function InvestorProofPage() {
               <div className="nf-investor-stat-rows">
                 <div className="nf-investor-stat-row">
                   <span className="nf-investor-stat-row-num">76%</span>
-                  <p className="nf-investor-stat-row-body">of CEOs expect AI to significantly disrupt their industry.</p>
+                  <p className="nf-investor-stat-row-body">of CEOs expect AI to have the greatest impact on their industry within three years.</p>
+                  <span className="nf-investor-stat-source">Gartner - 2025 CEO Survey</span>
                 </div>
                 <div className="nf-investor-stat-row">
                   <span className="nf-investor-stat-row-num">393%</span>
-                  <p className="nf-investor-stat-row-body">YoY growth in AI-driven retail traffic.</p>
-                </div>
-                <div className="nf-investor-stat-row">
-                  <span className="nf-investor-stat-row-num">45%</span>
-                  <p className="nf-investor-stat-row-body">of middle-market leaders say rising customer expectations are pressuring pricing, margins and profitability.</p>
+                  <p className="nf-investor-stat-row-body">YoY growth in traffic from AI sources to U.S. retail sites in Q1 2026.</p>
+                  <span className="nf-investor-stat-source">Adobe Digital Insights - Q1 2026</span>
                 </div>
               </div>
             </div>

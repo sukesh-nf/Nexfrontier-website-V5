@@ -1,3 +1,15 @@
 [build]
 command = "npm run build"
 publish = "out"
+
+[[redirects]]
+from = "/investor"
+to = "/investor-proof"
+status = 301
+force = true
+
+[[redirects]]
+from = "/market-evidence"
+to = "/hyper-accelerating-markets"
+status = 301
+force = true
