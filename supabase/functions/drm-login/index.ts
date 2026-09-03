@@ -107,6 +107,8 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    const accessStatus = investor.status;
+
     if (accessStatus === 'revoked') {
       await supabase.from('drm_audit_events').insert({
         event_type: 'LOGIN_DENIED_STATUS',
