@@ -148,7 +148,7 @@ function PulseForm() {
         </p>
         <div className="nf-pulse-success-ctas">
           <Button to="/the-shift">Explore The Shift</Button>
-          <TextLink to="/market-enquiry?topic=leadership-conversation">Talk to NexFrontier</TextLink>
+          <TextLink to="/market-enquiry?type=other">Talk to NexFrontier</TextLink>
         </div>
       </div>
     );

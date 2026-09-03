@@ -371,7 +371,7 @@ export default function FoundationCustomersPage() {
               </p>
             </div>
             <div className="nf-fc-apply-cta">
-              <Button to="/market-enquiry?topic=foundation-customer">
+              <Button to="/market-enquiry?type=foundation-customer">
                 APPLY TO BECOME A FOUNDATION CUSTOMER <ArrowRight size={16} style={{ marginLeft: '6px', verticalAlign: 'middle' }} />
               </Button>
             </div>
