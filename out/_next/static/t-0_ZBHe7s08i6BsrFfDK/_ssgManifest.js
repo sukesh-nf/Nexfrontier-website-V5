@@ -1,0 +1,1 @@
+self.__SSG_MANIFEST=new Set(["\u002Fabout\u002F[slug]","\u002Finvestor-data-room\u002F[slug]","\u002Freading-the-shift\u002F[slug]","\u002Fwatch\u002F[slug]"]);self.__SSG_MANIFEST_CB&&self.__SSG_MANIFEST_CB()

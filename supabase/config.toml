@@ -1,0 +1,38 @@
+[functions.drm-request]
+verify_jwt = true
+
+[functions.drm-activate]
+verify_jwt = true
+
+[functions.drm-login]
+verify_jwt = true
+
+[functions.drm-documents]
+verify_jwt = false
+
+[functions.drm-admin]
+verify_jwt = false
+
+[functions.market-enquiry]
+verify_jwt = true
+
+[functions.leadership-pulse]
+verify_jwt = true
+
+[functions.drm-nda]
+verify_jwt = false
+
+[functions.drm-content]
+verify_jwt = false
+
+[functions.drm-admin-activate]
+verify_jwt = false
+
+[functions.drm-admin-bootstrap]
+verify_jwt = false
+
+[functions.drm-content-admin]
+verify_jwt = false
+
+[functions.drm-admin-reset]
+verify_jwt = false
