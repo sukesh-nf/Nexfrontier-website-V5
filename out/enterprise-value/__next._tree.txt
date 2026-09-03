@@ -5,4 +5,4 @@
 :HL["/assets/images/Quiet_Loss_Website_Aug26.png","image"]
 :HL["/assets/images/Adaptive_Value_website_Aug26.png","image"]
 :HL["/assets/images/VAlue_Translation_Fwork_website_Aug26.png","image"]
-0:{"buildId":"NpuvM4xcMqVsYdKEOo0C3","tree":{"name":"","paramType":null,"paramKey":"","hasRuntimePrefetch":false,"slots":{"children":{"name":"enterprise-value","paramType":null,"paramKey":"enterprise-value","hasRuntimePrefetch":false,"slots":{"children":{"name":"__PAGE__","paramType":null,"paramKey":"__PAGE__","hasRuntimePrefetch":false,"slots":null,"isRootLayout":false}},"isRootLayout":false}},"isRootLayout":true},"staleTime":300}
+0:{"buildId":"q788ksDYD41a9LyYbJz3Q","tree":{"name":"","paramType":null,"paramKey":"","hasRuntimePrefetch":false,"slots":{"children":{"name":"enterprise-value","paramType":null,"paramKey":"enterprise-value","hasRuntimePrefetch":false,"slots":{"children":{"name":"__PAGE__","paramType":null,"paramKey":"__PAGE__","hasRuntimePrefetch":false,"slots":null,"isRootLayout":false}},"isRootLayout":false}},"isRootLayout":true},"staleTime":300}
