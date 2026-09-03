@@ -13,18 +13,41 @@
 | Investor product (Track B) | PASS |
 | Production readiness | NOT YET COMPLETE |
 
+### Two distinct readiness states
+
+**PUBLIC MARKET LAUNCH**
+
+The public NexFrontier website may proceed to production deployment and market launch once:
+
+- production environment is configured;
+- production deployment passes hosted QA;
+- public forms pass production QA;
+- founder admin access is confirmed;
+- security checks pass;
+- founder approves indexing and final launch.
+
+The placeholder NDA does not, by itself, prevent the public website from launching.
+
+**LIVE NON-TEST INVESTOR ISSUANCE**
+
+Live external investor activation/invitation requires additional gates:
+
+- production email delivery implemented and configured;
+- current NDA state permits non-test issuance.
+
+While `v1-PLACEHOLDER` remains current:
+
+NON-TEST INVESTOR ISSUANCE REMAINS INTENTIONALLY BLOCKED.
+
+QA/test investor flow remains available for production regression testing.
+
+Do not describe this as a public-site launch failure.
+
 ### Pre-launch cleanup completed
 
 - `@netlify/plugin-nextjs` dependency removed from `package.json` and lockfile
 - Temporary QA Edge Functions `drm-storage-cleanup` and `drm-bucket-delete` deleted from Supabase
 - Final Edge Function inventory: 13 production-required functions only
-
-### Remaining production actions
-
-- Founder personally sets/confirms final Super Admin passphrase
-- Production email delivery implementation + configuration
-- Netlify production environment/deployment
-- Hosted regression QA
 
 ---
 
@@ -129,7 +152,13 @@ Two separate gates control non-test investor issuance:
 - Production email implementation and provider are absent
 - Even once email is implemented, non-test investor issuance will still remain blocked while the placeholder NDA gate remains current
 
-**Do not imply email configuration alone enables live external investors. Both gates must be resolved.**
+BOTH GATES MUST BE SATISFIED BEFORE LIVE NON-TEST INVESTOR ISSUANCE.
+
+Neither gate prevents deployment and QA of the public website or QA/test-investor validation of the private investor system.
+
+Do not imply the placeholder NDA must be changed for public launch.
+
+Do not imply email configuration alone enables live external investors.
 
 ---
 
@@ -447,29 +476,42 @@ Email delivery, founder passphrase, and Data Room publication are NOT listed her
 
 ---
 
-## 20. Final Launch Blockers
+## 20. Remaining Production Gates
 
 ### PRODUCT / ARCHITECTURE BLOCKERS
 
 NONE — all cleanup complete.
 
-### PRODUCTION IMPLEMENTATION / CONFIGURATION REQUIRED
+### A. PUBLIC MARKET LAUNCH REQUIREMENTS
 
-1. Production email sending implementation (code must be written)
-2. Email provider configuration
-3. Sender identity/domain configuration
-4. SPF / DKIM / DMARC DNS records
-5. Edge Function email secrets configured in Supabase
-6. Production Netlify environment variables set
-7. Netlify deployment
+1. Production Netlify environment configuration
+2. Production deployment
+3. Production email implementation/configuration only where required for the intended live investor operation
+4. Hosted public regression QA
+5. Founder final Super Admin passphrase
+6. Founder approval to enable indexing
+7. Founder final launch acceptance
 
-### FOUNDER-CONTROLLED GATES
+The placeholder NDA is NOT a public-market-launch requirement.
 
-1. Final Super Admin passphrase (personally set by founder)
-2. Data Room six-page publication approval
-3. NDA state / whether non-test issuance gate is changed
-4. Enable public indexing
-5. Final launch acceptance
+### B. LIVE NON-TEST INVESTOR ISSUANCE GATES
+
+1. Production investor email implementation
+2. Email provider/sender/DNS configuration
+3. Current NDA state must permit non-test issuance
+4. Hosted end-to-end non-test investor validation only after those gates intentionally permit it
+
+Current status: intentionally blocked by `v1-PLACEHOLDER`.
+
+This is not a code defect. Do not instruct NM to change it.
+
+### C. PRIVATE DATA ROOM PUBLICATION GATE
+
+1. Founder approval of exact six core draft versions
+2. Publication using locked version semantics
+3. QA investor regression after publication
+
+Publishing Data Room content does not itself enable non-test investor issuance. Those are separate controls.
 
 ---
 
@@ -511,7 +553,9 @@ NONE — all cleanup complete.
 23. Verify mobile/desktop public pages
 24. Verify no console/runtime errors
 
-### PHASE 5 — QA INVESTOR JOURNEY (USE TEST INVESTOR ONLY)
+### PHASE 5 — QA/TEST INVESTOR JOURNEY
+
+Use only an investor record with `is_test_investor = true`.
 
 25. Use explicit QA/test investor only — do not use a real investor
 26. Public request submission
@@ -523,6 +567,8 @@ NONE — all cleanup complete.
 32. Data Room Home should remain empty because all topics are inactive
 33. Logout / return login
 34. Clean QA data if safe
+
+This validates production functionality without bypassing the non-test production gate.
 
 ### PHASE 6 — FOUNDER APPROVES PRIVATE CONTENT
 
@@ -555,6 +601,20 @@ NONE — all cleanup complete.
 52. Founder final hosted QA
 53. NM confirms infrastructure health
 54. Launch
+
+### OPTIONAL FUTURE PHASE — LIVE INVESTOR ISSUANCE ACTIVATION (ONLY WHEN FOUNDER AUTHORISES)
+
+This is NOT part of the required public launch sequence unless separately authorised.
+
+When founder decides to enable live non-test investor issuance:
+
+1. Confirm production email delivery operational
+2. Confirm founder-approved current NDA state permits non-test issuance
+3. Run controlled end-to-end external-investor readiness QA
+4. Confirm no test flags/bypasses
+5. Founder authorises real investor issuance
+
+Do not assign timing. Do not alter the NDA.
 
 ---
 
@@ -589,7 +649,13 @@ NONE — all cleanup complete.
 3. Explicitly approve enabling public indexing
 4. Final launch acceptance/timing
 
-Founder does NOT perform: DNS configuration, email provider setup, Supabase secret configuration, Netlify deployment, NDA/legal decisions (unless founder explicitly chooses to change the placeholder NDA).
+The founder owns product, content, NDA/legal-state, indexing and final launch decisions. NM executes the approved technical changes but does not make those decisions.
+
+Founder does NOT perform: DNS configuration, email provider setup, Supabase secret configuration, Netlify deployment.
+
+The founder may separately decide when the current NDA state should change to permit live non-test investor issuance. This is not a prerequisite to the current public-site market launch unless the founder explicitly makes live investor issuance part of that launch gate.
+
+Do not create a new immediate NDA task.
 
 ---
 
@@ -609,6 +675,10 @@ Founder does NOT perform: DNS configuration, email provider setup, Supabase secr
 12. Security verification
 13. Indexing enablement after founder approval
 14. Rollback readiness
+
+NM must not interpret deployment readiness as authority to change the NDA state or remove the non-test investor issuance gate.
+
+NM may: implement production email capability; configure email; deploy; QA — but live non-test issuance remains subject to founder-controlled NDA state.
 
 NM does NOT: choose founder credentials, make NDA/legal decisions, reinterpret product strategy, or relabel real investors as test investors.
 

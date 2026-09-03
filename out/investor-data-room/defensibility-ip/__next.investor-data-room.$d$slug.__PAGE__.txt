@@ -2,5 +2,5 @@
 2:I[76487,["/_next/static/chunks/c5a936c0a2847357.js","/_next/static/chunks/041257bfacfa1873.js","/_next/static/chunks/2ac7cb703c206a52.js"],"RuntimeTopicPage"]
 3:I[97367,["/_next/static/chunks/ff1a16fafef87110.js","/_next/static/chunks/d2be314c3ece3fbe.js"],"OutletBoundary"]
 4:"$Sreact.suspense"
-0:{"buildId":"W6J_0LKo3XrDS6xiyVk3O","rsc":["$","$1","c",{"children":[["$","$L2",null,{"slug":"defensibility-ip","title":"Defensibility & IP","question":"What makes NexFrontier defensible?"}],[["$","script","script-0",{"src":"/_next/static/chunks/041257bfacfa1873.js","async":true}],["$","script","script-1",{"src":"/_next/static/chunks/2ac7cb703c206a52.js","async":true}]],["$","$L3",null,{"children":["$","$4",null,{"name":"Next.MetadataOutlet","children":"$@5"}]}]]}],"loading":null,"isPartial":false}
+0:{"buildId":"lHTqoLnDDChYIvO5WlFNe","rsc":["$","$1","c",{"children":[["$","$L2",null,{"slug":"defensibility-ip","title":"Defensibility & IP","question":"What makes NexFrontier defensible?"}],[["$","script","script-0",{"src":"/_next/static/chunks/041257bfacfa1873.js","async":true}],["$","script","script-1",{"src":"/_next/static/chunks/2ac7cb703c206a52.js","async":true}]],["$","$L3",null,{"children":["$","$4",null,{"name":"Next.MetadataOutlet","children":"$@5"}]}]]}],"loading":null,"isPartial":false}
 5:null
