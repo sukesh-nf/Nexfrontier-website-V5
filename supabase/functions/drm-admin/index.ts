@@ -1,5 +1,6 @@
 // verify_jwt: false (internal admin-session-token auth, not JWT)
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
+import { sendMailgunEmail, emailTemplate } from '../_shared/mailgun.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -1366,12 +1367,47 @@ Deno.serve(async (req: Request) => {
       const baseUrl = Deno.env.get('PUBLIC_SITE_URL') || 'https://v5-nexfrontier-green-hz85.bolt.host';
       const activationUrl = `${baseUrl}/investor-admin?activate=${activationToken}`;
 
+      const emailHtml = emailTemplate({
+        eyebrow: 'NexFrontier · Investor Data Room',
+        heading: 'You\u2019ve been invited as an admin',
+        bodyHtml: `
+          <p style="color:#94a3b8;font-size:14px;line-height:1.7;margin:0 0 20px">Hi ${name},</p>
+          <p style="color:#94a3b8;font-size:14px;line-height:1.7;margin:0 0 20px">
+            You've been invited as a ${role.replace('_', ' ')} for the NexFrontier Investor Data Room. Click below to set your passphrase and activate your account.
+          </p>
+          <div style="margin:0 0 24px">
+            <a href="${activationUrl}" style="display:inline-block;background:#22d3ee;color:#0a0f1a;font-weight:600;padding:12px 24px;border-radius:8px;text-decoration:none">Activate account</a>
+          </div>
+          <p style="color:#64748b;font-size:13px;line-height:1.6;margin:0">
+            This link expires in 48 hours and can only be used once.
+          </p>
+        `,
+      });
+
+      const emailResult = await sendMailgunEmail({
+        to: email,
+        subject: 'You\u2019ve been invited to NexFrontier\u2019s Investor Data Room admin',
+        html: emailHtml,
+      });
+
+      if (emailResult.sent) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            message: 'Admin invitation sent.',
+            adminId: newAdmin.id,
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
       return new Response(
         JSON.stringify({
           ok: true,
           message: 'DEV MANUAL DELIVERY — Admin invitation created.',
           devActivationUrl: activationUrl,
           devWarning: 'This activation URL contains a secret. Share only with the intended admin. It expires 48 hours after issue and will not be shown again.',
+          emailDeliveryError: emailResult.error,
           adminId: newAdmin.id,
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },

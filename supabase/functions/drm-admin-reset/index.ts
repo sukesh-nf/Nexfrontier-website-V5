@@ -1,5 +1,6 @@
 // verify_jwt: false (admin reset token auth, not JWT)
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
+import { sendMailgunEmail, emailTemplate } from '../_shared/mailgun.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -164,12 +165,47 @@ Deno.serve(async (req: Request) => {
       const baseUrl = Deno.env.get('PUBLIC_SITE_URL') || 'https://v5-nexfrontier-green-hz85.bolt.host';
       const resetUrl = `${baseUrl}/investor-admin/reset-passphrase?token=${resetToken}`;
 
+      const emailHtml = emailTemplate({
+        eyebrow: 'NexFrontier · Investor Data Room',
+        heading: 'Reset your admin passphrase',
+        bodyHtml: `
+          <p style="color:#94a3b8;font-size:14px;line-height:1.7;margin:0 0 20px">Hi ${admin.name},</p>
+          <p style="color:#94a3b8;font-size:14px;line-height:1.7;margin:0 0 20px">
+            A passphrase reset was requested for your NexFrontier admin account. Click below to set a new passphrase.
+          </p>
+          <div style="margin:0 0 24px">
+            <a href="${resetUrl}" style="display:inline-block;background:#22d3ee;color:#0a0f1a;font-weight:600;padding:12px 24px;border-radius:8px;text-decoration:none">Reset passphrase</a>
+          </div>
+          <p style="color:#64748b;font-size:13px;line-height:1.6;margin:0">
+            If you didn't request this, contact NexFrontier immediately. This link expires in 48 hours and can only be used once.
+          </p>
+        `,
+      });
+
+      const emailResult = await sendMailgunEmail({
+        to: admin.email,
+        subject: 'Reset your NexFrontier admin passphrase',
+        html: emailHtml,
+      });
+
+      if (emailResult.sent) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            message: 'A passphrase reset email has been sent.',
+            admin: { name: admin.name, email: admin.email },
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
       return new Response(
         JSON.stringify({
           ok: true,
           message: 'DEV MANUAL DELIVERY — ADMIN PASSPHRASE RESET',
           devResetUrl: resetUrl,
           devWarning: 'This URL contains a secret. It may be used once and expires 48 hours after issue. Do not store or forward it unnecessarily.',
+          emailDeliveryError: emailResult.error,
           admin: { name: admin.name, email: admin.email },
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
