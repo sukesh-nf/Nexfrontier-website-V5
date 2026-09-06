@@ -662,7 +662,8 @@ Deno.serve(async (req: Request) => {
       });
 
       // DEV manual delivery: one-time activation URL for test investors
-      const activationUrl = `${Deno.env.get('SUPABASE_URL')?.replace('.supabase.co', '')}/investor-data-room?token=${inviteToken}`;
+      const baseUrl = Deno.env.get('PUBLIC_SITE_URL') || 'https://v5-nexfrontier-green-hz85.bolt.host';
+      const activationUrl = `${baseUrl}/investor-data-room?token=${inviteToken}`;
 
       return new Response(
         JSON.stringify({
@@ -787,7 +788,8 @@ Deno.serve(async (req: Request) => {
         },
       });
 
-      const activationUrl = `${Deno.env.get('SUPABASE_URL')?.replace('.supabase.co', '')}/investor-data-room?token=${inviteToken}`;
+      const baseUrl = Deno.env.get('PUBLIC_SITE_URL') || 'https://v5-nexfrontier-green-hz85.bolt.host';
+      const activationUrl = `${baseUrl}/investor-data-room?token=${inviteToken}`;
 
       return new Response(
         JSON.stringify({
@@ -1361,7 +1363,8 @@ Deno.serve(async (req: Request) => {
         event_metadata: { target_admin_id: newAdmin.id, target_email: email, role },
       });
 
-      const activationUrl = `${Deno.env.get('SUPABASE_URL')?.replace('.supabase.co', '')}/investor-admin?activate=${activationToken}`;
+      const baseUrl = Deno.env.get('PUBLIC_SITE_URL') || 'https://v5-nexfrontier-green-hz85.bolt.host';
+      const activationUrl = `${baseUrl}/investor-admin?activate=${activationToken}`;
 
       return new Response(
         JSON.stringify({

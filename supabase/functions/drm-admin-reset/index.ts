@@ -161,7 +161,7 @@ Deno.serve(async (req: Request) => {
       });
 
       // DEV manual delivery URL
-      const baseUrl = Deno.env.get('SUPABASE_URL')?.replace('.supabase.co', '') || '';
+      const baseUrl = Deno.env.get('PUBLIC_SITE_URL') || 'https://v5-nexfrontier-green-hz85.bolt.host';
       const resetUrl = `${baseUrl}/investor-admin/reset-passphrase?token=${resetToken}`;
 
       return new Response(

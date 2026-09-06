@@ -130,7 +130,7 @@ Deno.serve(async (req: Request) => {
     });
 
     // Build activation URL for DEV manual delivery
-    const baseUrl = Deno.env.get('SUPABASE_URL')?.replace('.supabase.co', '') || '';
+    const baseUrl = Deno.env.get('PUBLIC_SITE_URL') || 'https://v5-nexfrontier-green-hz85.bolt.host';
     const activationUrl = `${baseUrl}/investor-admin?activate=${activationToken}`;
 
     return new Response(
