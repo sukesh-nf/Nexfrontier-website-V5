@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   ArrowLeft, ArrowRight, Lock, FileText, FolderKanban, BarChart3,
   Users, ShieldCheck, Settings, LogOut, Eye, Download, Clock,
@@ -139,7 +140,7 @@ async function adminCall(action: string, body: Record<string, unknown> = {}, adm
 // ============================================================
 // Main Component
 // ============================================================
-export function InvestorDataRoom() {
+function InvestorDataRoomInner() {
   const [view, setView] = useState<View>('secure-access');
   const [investor, setInvestor] = useState<Investor | null>(null);
   const [admin, setAdmin] = useState<AdminUser | null>(null);
@@ -248,6 +249,18 @@ export function InvestorDataRoom() {
   return <SecureAccessScreen onInvestorActivated={handleInvestorActivated} onAdminLogin={handleAdminLogin} onReturnLogin={loginWithSession} />;
 }
 
+export function InvestorDataRoom() {
+  return (
+    <Suspense fallback={
+      <div style={{ minHeight: '100vh', background: 'var(--nf-bg-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ color: 'var(--nf-text-tertiary)', fontSize: '0.875rem' }}>Loading...</div>
+      </div>
+    }>
+      <InvestorDataRoomInner />
+    </Suspense>
+  );
+}
+
 // ============================================================
 // Secure Access Screen
 // ============================================================
@@ -262,6 +275,7 @@ function SecureAccessScreen({
   onAdminLogin: (adm: AdminUser, token: string) => void;
   onReturnLogin: (token: string) => void;
 }) {
+  const searchParams = useSearchParams();
   const [mode, setMode] = useState<AccessMode>('menu');
   const [token, setToken] = useState('');
   const [passphrase, setPassphrase] = useState('');
@@ -275,6 +289,19 @@ function SecureAccessScreen({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  // Auto-detect ?token= from an invitation link — without this, the recipient
+  // lands on a generic menu with no indication a token exists at all, and has
+  // to manually click "Enter access token" then copy-paste it from the email
+  // themselves. This jumps straight to that screen with the token pre-filled.
+  useEffect(() => {
+    const urlToken = searchParams.get('token');
+    if (urlToken) {
+      setToken(urlToken);
+      setMode('token');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleTokenActivate = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   BarChart3, Users, FileText, Activity, ShieldCheck,
@@ -261,6 +261,8 @@ function AdminShellInner() {
   const [auditAreaFilter, setAuditAreaFilter] = useState('');
   const [auditEventFilter, setAuditEventFilter] = useState('');
   const [contentPages, setContentPages] = useState<ContentPageRecord[]>([]);
+  const [contentPageError, setContentPageError] = useState('');
+  const latestPageRequestRef = useRef<string | null>(null);
   const [contentLoading, setContentLoading] = useState(false);
   const [selectedContentPage, setSelectedContentPage] = useState<ContentPageDetail | null>(null);
   const [contentSearchQuery, setContentSearchQuery] = useState('');
@@ -274,6 +276,8 @@ function AdminShellInner() {
   } | null>(null);
   const [confirm, setConfirm] = useState<{ message: string; action: () => Promise<void> } | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [actionError, setActionError] = useState('');
+  const [approveAsTest, setApproveAsTest] = useState<Record<string, boolean>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedInvestor, setSelectedInvestor] = useState<InvestorRecord | null>(null);
@@ -359,10 +363,18 @@ function AdminShellInner() {
   }, [contentApiCall]);
 
   const loadContentPage = useCallback(async (pageId: string) => {
+    latestPageRequestRef.current = pageId;
+    setContentPageError('');
     try {
       const data = await contentApiCall('get-page', { pageId });
-      setSelectedContentPage(data);
-    } catch { /* ignore */ }
+      if (latestPageRequestRef.current === pageId) {
+        setSelectedContentPage(data);
+      }
+    } catch (e) {
+      if (latestPageRequestRef.current === pageId) {
+        setContentPageError(e instanceof Error ? e.message : 'Unable to load this page. Please try again.');
+      }
+    }
   }, [contentApiCall]);
 
   useEffect(() => {
@@ -480,15 +492,17 @@ function AdminShellInner() {
 
   const executeAction = async (fn: () => Promise<void>) => {
     setActionLoading(true);
+    setActionError('');
     try { await fn(); await loadMgmt(); await loadOverview(); }
-    catch (e) { /* show error */ }
+    catch (e) { setActionError(e instanceof Error ? e.message : 'Action failed.'); }
     finally { setActionLoading(false); }
   };
 
-  const approveRequest = async (req: RequestRecord) => {
+  const approveRequest = async (req: RequestRecord, isTest: boolean) => {
     await apiCall('send-invite', {
       name: req.name, email: req.email, phone: req.phone,
       source: req.source, requestId: req.id,
+      isTestInvestor: isTest,
     });
   };
 
@@ -797,6 +811,14 @@ function AdminShellInner() {
             </div>
           )}
 
+          {actionError && (
+            <div style={{ position: 'fixed', top: '100px', right: '20px', zIndex: 100, display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 16px', background: 'var(--nf-bg-surface-1)', border: '1px solid var(--nf-negative)', borderRadius: 'var(--nf-radius-control)', maxWidth: '360px' }}>
+              <AlertCircle size={16} color="var(--nf-negative)" style={{ flexShrink: 0 }} />
+              <span style={{ fontSize: '0.8125rem', color: 'var(--nf-text-primary)' }}>{actionError}</span>
+              <button onClick={() => setActionError('')} style={{ background: 'none', border: 'none', color: 'var(--nf-text-tertiary)', cursor: 'pointer', padding: 0, marginLeft: 'auto' }}><X size={14} /></button>
+            </div>
+          )}
+
           {/* OVERVIEW */}
           {tab === 'overview' && (
             <div>
@@ -869,23 +891,29 @@ function AdminShellInner() {
                           <td style={{ padding: '10px 12px', color: 'var(--nf-text-secondary)' }}>{req.organisation || '—'}</td>
                           <td style={{ padding: '10px 12px', color: 'var(--nf-text-tertiary)' }}>{formatDate(req.created_at)}</td>
                           <td style={{ padding: '10px 12px' }}><StatusBadge status={req.status} /></td>
-                          <td style={{ padding: '10px 12px', display: 'flex', gap: '8px' }}>
-                            <button onClick={() => doAction(
-                              `Approve ${req.name}'s request and issue a 48-hour activation link?`,
-                              () => executeAction(() => approveRequest(req))
-                            )} style={{
-                              padding: '5px 12px', borderRadius: 'var(--nf-radius-button)',
-                              background: 'var(--nf-cyan)', color: '#041014',
-                              fontSize: '0.75rem', fontWeight: 700, border: 'none', cursor: 'pointer',
-                            }}>Approve</button>
-                            <button onClick={() => doAction(
-                              `Decline ${req.name}'s access request?`,
-                              () => executeAction(() => declineRequest(req))
-                            )} style={{
-                              padding: '5px 12px', borderRadius: 'var(--nf-radius-button)',
-                              background: 'transparent', color: 'var(--nf-negative)',
-                              fontSize: '0.75rem', fontWeight: 600, border: '1px solid var(--nf-border)', cursor: 'pointer',
-                            }}>Decline</button>
+                          <td style={{ padding: '10px 12px' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.6875rem', color: 'var(--nf-text-tertiary)', marginBottom: '6px' }}>
+                              <input type="checkbox" checked={approveAsTest[req.id] ?? true} onChange={e => setApproveAsTest(prev => ({ ...prev, [req.id]: e.target.checked }))} style={{ width: '13px', height: '13px' }} />
+                              Test investor
+                            </label>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              <button onClick={() => doAction(
+                                `Approve ${req.name}'s request${(approveAsTest[req.id] ?? true) ? ' as a TEST investor' : ' \u2014 REAL investor'} and issue a 48-hour activation link?${!(approveAsTest[req.id] ?? true) ? ' Note: real approvals will be blocked while the NDA is still a placeholder.' : ''}`,
+                                () => executeAction(() => approveRequest(req, approveAsTest[req.id] ?? true))
+                              )} style={{
+                                padding: '5px 12px', borderRadius: 'var(--nf-radius-button)',
+                                background: 'var(--nf-cyan)', color: '#041014',
+                                fontSize: '0.75rem', fontWeight: 700, border: 'none', cursor: 'pointer',
+                              }}>Approve</button>
+                              <button onClick={() => doAction(
+                                `Decline ${req.name}'s access request?`,
+                                () => executeAction(() => declineRequest(req))
+                              )} style={{
+                                padding: '5px 12px', borderRadius: 'var(--nf-radius-button)',
+                                background: 'transparent', color: 'var(--nf-negative)',
+                                fontSize: '0.75rem', fontWeight: 600, border: '1px solid var(--nf-border)', cursor: 'pointer',
+                              }}>Decline</button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -1082,6 +1110,12 @@ function AdminShellInner() {
           {tab === 'content' && (
             <div>
               <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--nf-text-primary)', marginBottom: 'var(--nf-space-6)' }}>Data Room Content</h2>
+              {contentPageError && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', marginBottom: 'var(--nf-space-5)', background: 'var(--nf-bg-surface-1)', border: '1px solid var(--nf-negative)', borderRadius: 'var(--nf-radius-control)' }}>
+                  <AlertCircle size={15} color="var(--nf-negative)" style={{ flexShrink: 0 }} />
+                  <span style={{ fontSize: '0.8125rem', color: 'var(--nf-text-primary)' }}>{contentPageError}</span>
+                </div>
+              )}
               {selectedContentPage ? (
                 <div>
                   <button onClick={() => { setSelectedContentPage(null); setEditingDraft(null); }} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.8125rem', color: 'var(--nf-text-tertiary)', background: 'none', border: 'none', cursor: 'pointer', marginBottom: 'var(--nf-space-4)' }}><ArrowLeft size={14} /> Back to pages</button>
