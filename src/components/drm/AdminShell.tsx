@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   BarChart3, Users, FileText, Activity, ShieldCheck,
   Settings, Lock, LogOut, ArrowLeft, X, AlertCircle, Loader2,
@@ -11,7 +12,7 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 type AdminTab = 'overview' | 'requests' | 'invitations' | 'investors' | 'activity' | 'content' | 'admins' | 'audit';
-type AdminState = 'checking' | 'login' | 'authorised';
+type AdminState = 'checking' | 'login' | 'activate' | 'authorised';
 
 interface ContentSection { label: string; body: string; evidence_state?: string }
 
@@ -233,7 +234,9 @@ function PlaceholderTab({ title }: { title: string }) {
   );
 }
 
-export function AdminShell() {
+function AdminShellInner() {
+  const searchParams = useSearchParams();
+  const activationToken = searchParams.get('activate');
   const [adminState, setAdminState] = useState<AdminState>('checking');
   const [tab, setTab] = useState<AdminTab>('overview');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -241,6 +244,10 @@ export function AdminShell() {
   const [adminPass, setAdminPass] = useState('');
   const [loginError, setLoginError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [activationPassphrase, setActivationPassphrase] = useState('');
+  const [activationConfirm, setActivationConfirm] = useState('');
+  const [activationError, setActivationError] = useState('');
+  const [activationLoading, setActivationLoading] = useState(false);
   const [adminInfo, setAdminInfo] = useState<AdminInfo | null>(null);
   const [mgmtData, setMgmtData] = useState<MgmtData | null>(null);
   const [mgmtLoading, setMgmtLoading] = useState(false);
@@ -364,10 +371,12 @@ export function AdminShell() {
     if (savedToken && savedAdmin) {
       setAdminInfo(JSON.parse(savedAdmin));
       setAdminState('authorised');
+    } else if (activationToken) {
+      setAdminState('activate');
     } else {
       setAdminState('login');
     }
-  }, []);
+  }, [activationToken]);
 
   useEffect(() => {
     if (adminState === 'authorised') {
@@ -405,6 +414,46 @@ export function AdminShell() {
       setLoginError('Admin login failed.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleActivate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setActivationError('');
+
+    if (!activationToken) {
+      setActivationError('Missing activation token. Please use the link from your invitation email.');
+      return;
+    }
+    if (activationPassphrase.length < 12) {
+      setActivationError('Passphrase must be at least 12 characters.');
+      return;
+    }
+    if (activationPassphrase !== activationConfirm) {
+      setActivationError('Passphrases do not match.');
+      return;
+    }
+
+    setActivationLoading(true);
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/drm-admin-activate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${ANON_KEY}` },
+        body: JSON.stringify({ activationToken, passphrase: activationPassphrase }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setActivationError(data.message || 'Activation failed.');
+        return;
+      }
+      sessionStorage.setItem('drm_admin_token', data.adminToken);
+      sessionStorage.setItem('drm_admin', JSON.stringify(data.admin));
+      setAdminInfo(data.admin);
+      setAdminState('authorised');
+    } catch {
+      setActivationError('Activation failed. Please try again.');
+    } finally {
+      setActivationLoading(false);
     }
   };
 
@@ -492,6 +541,56 @@ export function AdminShell() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--nf-text-tertiary)', fontSize: '0.875rem' }}>
           <Loader2 size={18} className="nf-drm-spin" /> Verifying admin access...
           <style>{`.nf-drm-spin{animation:nf-spin 1s linear infinite}@keyframes nf-spin{to{transform:rotate(360deg)}}`}</style>
+        </div>
+      </div>
+    );
+  }
+
+  if (adminState === 'activate') {
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--nf-bg-primary)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 'var(--nf-space-6)' }}>
+        <div style={{ maxWidth: '420px', width: '100%' }}>
+          <div style={{ textAlign: 'center', marginBottom: 'var(--nf-space-7)' }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', marginBottom: 'var(--nf-space-4)' }}>
+              <Lock size={24} color="var(--nf-cyan)" />
+              <span style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--nf-text-primary)', letterSpacing: '-0.02em' }}>NexFrontier Admin</span>
+            </div>
+            <p style={{ fontSize: '0.875rem', color: 'var(--nf-text-tertiary)' }}>Set your passphrase to activate your admin account.</p>
+          </div>
+          <a href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.8125rem', color: 'var(--nf-text-tertiary)', textDecoration: 'none', marginBottom: 'var(--nf-space-6)' }}>
+            <ArrowLeft size={14} /> Back to NexFrontier
+          </a>
+          <form onSubmit={handleActivate} style={{
+            background: 'var(--nf-bg-surface-1)', border: '1px solid var(--nf-border)',
+            borderRadius: 'var(--nf-radius-panel)', padding: 'var(--nf-space-7)',
+            display: 'flex', flexDirection: 'column', gap: 'var(--nf-space-5)',
+          }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--nf-text-secondary)', marginBottom: '6px' }}>Set a passphrase</label>
+              <input type="password" value={activationPassphrase} onChange={(e) => setActivationPassphrase(e.target.value)} style={{
+                width: '100%', padding: '12px 14px', background: 'var(--nf-bg-surface-2)',
+                border: '1px solid var(--nf-border)', borderRadius: 'var(--nf-radius-control)',
+                color: 'var(--nf-text-primary)', fontSize: '0.9375rem', outline: 'none',
+              }} placeholder="At least 12 characters" autoFocus />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--nf-text-secondary)', marginBottom: '6px' }}>Confirm passphrase</label>
+              <input type="password" value={activationConfirm} onChange={(e) => setActivationConfirm(e.target.value)} style={{
+                width: '100%', padding: '12px 14px', background: 'var(--nf-bg-surface-2)',
+                border: '1px solid var(--nf-border)', borderRadius: 'var(--nf-radius-control)',
+                color: 'var(--nf-text-primary)', fontSize: '0.9375rem', outline: 'none',
+              }} placeholder="Re-enter your passphrase" />
+            </div>
+            {activationError && <p style={{ fontSize: '0.875rem', color: 'var(--nf-negative)' }}>{activationError}</p>}
+            <button type="submit" disabled={activationLoading || activationPassphrase.length < 12 || !activationConfirm} style={{
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+              padding: '12px 18px', borderRadius: 'var(--nf-radius-button)',
+              background: 'var(--nf-cyan)', color: '#041014',
+              fontSize: '0.8125rem', fontWeight: 700, border: 'none', cursor: 'pointer',
+              opacity: activationLoading || activationPassphrase.length < 12 || !activationConfirm ? 0.4 : 1,
+            }}>{activationLoading ? 'Activating...' : 'Activate account'}</button>
+            <p style={{ fontSize: '0.75rem', color: 'var(--nf-text-tertiary)' }}>This passphrase will be used for admin login on future visits. This link can only be used once.</p>
+          </form>
         </div>
       </div>
     );
@@ -1490,5 +1589,17 @@ export function AdminShell() {
         }
       `}</style>
     </div>
+  );
+}
+
+export function AdminShell() {
+  return (
+    <Suspense fallback={
+      <div style={{ minHeight: '100vh', background: 'var(--nf-bg-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ color: 'var(--nf-text-tertiary)', fontSize: '0.875rem' }}>Loading...</div>
+      </div>
+    }>
+      <AdminShellInner />
+    </Suspense>
   );
 }
