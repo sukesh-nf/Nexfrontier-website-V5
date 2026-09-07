@@ -1,8 +1,0 @@
-:HL["/_next/static/chunks/86f9a5cc20b78f3a.css","style"]
-:HL["/_next/static/chunks/236074b8c8d25d70.css","style"]
-:HL["/_next/static/media/83afe278b6a6bb3c-s.p.3a6ba036.woff2","font",{"crossOrigin":"","type":"font/woff2"}]
-:HL["/assets/images/Enterprise_Value_Website_Aug26.png","image"]
-:HL["/assets/images/Quiet_Loss_Website_Aug26.png","image"]
-:HL["/assets/images/Adaptive_Value_website_Aug26.png","image"]
-:HL["/assets/images/VAlue_Translation_Fwork_website_Aug26.png","image"]
-0:{"buildId":"BaOpufUYn6nBtFnLErwBv","tree":{"name":"","paramType":null,"paramKey":"","hasRuntimePrefetch":false,"slots":{"children":{"name":"enterprise-value","paramType":null,"paramKey":"enterprise-value","hasRuntimePrefetch":false,"slots":{"children":{"name":"__PAGE__","paramType":null,"paramKey":"__PAGE__","hasRuntimePrefetch":false,"slots":null,"isRootLayout":false}},"isRootLayout":false}},"isRootLayout":true},"staleTime":300}
