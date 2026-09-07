@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { AdminShell } from '@/components/drm/AdminShell';
+import { AdminHub } from '@/components/drm/AdminHub';
 
 export const metadata: Metadata = {
   title: 'Admin — NexFrontier',
@@ -7,5 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function InvestorAdminPage() {
-  return <AdminShell />;
+  return <AdminHub />;
 }
