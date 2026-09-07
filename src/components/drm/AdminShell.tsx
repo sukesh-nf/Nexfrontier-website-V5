@@ -572,6 +572,9 @@ function AdminShellInner() {
                 border: '1px solid var(--nf-border)', borderRadius: 'var(--nf-radius-control)',
                 color: 'var(--nf-text-primary)', fontSize: '0.9375rem', outline: 'none',
               }} placeholder="At least 12 characters" autoFocus />
+              <p style={{ fontSize: '0.75rem', marginTop: '4px', color: activationPassphrase.length >= 12 ? 'var(--nf-positive, #22c55e)' : 'var(--nf-text-tertiary)' }}>
+                {activationPassphrase.length}/12 characters minimum{activationPassphrase.length >= 12 ? ' ✓' : ''}
+              </p>
             </div>
             <div>
               <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, color: 'var(--nf-text-secondary)', marginBottom: '6px' }}>Confirm passphrase</label>
@@ -580,14 +583,19 @@ function AdminShellInner() {
                 border: '1px solid var(--nf-border)', borderRadius: 'var(--nf-radius-control)',
                 color: 'var(--nf-text-primary)', fontSize: '0.9375rem', outline: 'none',
               }} placeholder="Re-enter your passphrase" />
+              {activationConfirm.length > 0 && (
+                <p style={{ fontSize: '0.75rem', marginTop: '4px', color: activationConfirm === activationPassphrase ? 'var(--nf-positive, #22c55e)' : 'var(--nf-negative)' }}>
+                  {activationConfirm === activationPassphrase ? 'Passphrases match ✓' : 'Passphrases do not match yet'}
+                </p>
+              )}
             </div>
             {activationError && <p style={{ fontSize: '0.875rem', color: 'var(--nf-negative)' }}>{activationError}</p>}
-            <button type="submit" disabled={activationLoading || activationPassphrase.length < 12 || !activationConfirm} style={{
+            <button type="submit" disabled={activationLoading || activationPassphrase.length < 12 || activationConfirm !== activationPassphrase} style={{
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
               padding: '12px 18px', borderRadius: 'var(--nf-radius-button)',
               background: 'var(--nf-cyan)', color: '#041014',
               fontSize: '0.8125rem', fontWeight: 700, border: 'none', cursor: 'pointer',
-              opacity: activationLoading || activationPassphrase.length < 12 || !activationConfirm ? 0.4 : 1,
+              opacity: activationLoading || activationPassphrase.length < 12 || activationConfirm !== activationPassphrase ? 0.4 : 1,
             }}>{activationLoading ? 'Activating...' : 'Activate account'}</button>
             <p style={{ fontSize: '0.75rem', color: 'var(--nf-text-tertiary)' }}>This passphrase will be used for admin login on future visits. This link can only be used once.</p>
           </form>
