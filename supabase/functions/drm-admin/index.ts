@@ -537,18 +537,18 @@ Deno.serve(async (req: Request) => {
           );
         }
 
-        // Non-test + no email provider = no secret returned, block issuance
-        return new Response(
-          JSON.stringify({
-            ok: false,
-            code: 'EMAIL_DELIVERY_NOT_CONFIGURED',
-            message: 'Email delivery is not configured. Production invitations cannot be completed without an email provider.',
-          }),
-          { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-        );
+        if (!Deno.env.get('MAILGUN_API_KEY')) {
+          return new Response(
+            JSON.stringify({
+              ok: false,
+              code: 'EMAIL_DELIVERY_NOT_CONFIGURED',
+              message: 'Email delivery is not configured. Production invitations cannot be completed without an email provider.',
+            }),
+            { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          );
+        }
       }
 
-      // --- Test investor path: DEV manual delivery permitted ---
       const { data: existing } = await supabase
         .from('drm_investors')
         .select('id')
@@ -570,7 +570,7 @@ Deno.serve(async (req: Request) => {
             invite_date: new Date().toISOString(),
             phone, source, organisation, role,
             relationship_owner_id: relationshipOwnerId,
-            is_test_investor: true,
+            is_test_investor: isTestInvestor,
             suspended_at: null, suspended_by: null,
             revoked_at: null, revoked_by: null,
           })
@@ -583,7 +583,7 @@ Deno.serve(async (req: Request) => {
             lifecycle_status: lifecycleOnEntry,
             invite_date: new Date().toISOString(),
             relationship_owner_id: relationshipOwnerId,
-            is_test_investor: true,
+            is_test_investor: isTestInvestor,
           })
           .select('id')
           .single();
@@ -640,7 +640,7 @@ Deno.serve(async (req: Request) => {
         admin_id: adminId,
         investor_id: investorId,
         event_type: 'invitation_sent',
-        event_detail: { source, request_id: requestId, is_test: true },
+        event_detail: { source, request_id: requestId, is_test: isTestInvestor },
       });
 
       await supabase.from('drm_audit_events').insert({
@@ -648,7 +648,7 @@ Deno.serve(async (req: Request) => {
         investor_id: investorId,
         request_id: requestId,
         admin_id: adminId,
-        event_metadata: { source, is_test: true },
+        event_metadata: { source, is_test: isTestInvestor },
       });
       await supabase.from('drm_audit_events').insert({
         event_type: 'ACTIVATION_TOKEN_ISSUED',
@@ -658,22 +658,52 @@ Deno.serve(async (req: Request) => {
           reason: requestId ? 'approval' : 'direct_invitation',
           expires_in_hours: 48,
           previous_token_invalidated: previousTokensInvalidated.count !== null,
-          is_test: true,
+          is_test: isTestInvestor,
         },
       });
 
-      // DEV manual delivery: one-time activation URL for test investors
       const baseUrl = Deno.env.get('PUBLIC_SITE_URL') || 'https://v5-nexfrontier-green-hz85.bolt.host';
       const activationUrl = `${baseUrl}/investor-data-room?token=${inviteToken}`;
+
+      const emailHtml = emailTemplate({
+        eyebrow: 'NexFrontier · Investor Data Room',
+        heading: 'You’ve been invited to the Investor Data Room',
+        bodyHtml: `
+          <p style="color:#94a3b8;font-size:14px;line-height:1.7;margin:0 0 20px">Hi ${name},</p>
+          <p style="color:#94a3b8;font-size:14px;line-height:1.7;margin:0 0 20px">
+            You've been invited to access NexFrontier's Investor Data Room. Click below to set your passphrase and activate access.
+          </p>
+          <div style="margin:0 0 24px">
+            <a href="${activationUrl}" style="display:inline-block;background:#22d3ee;color:#0a0f1a;font-weight:600;padding:12px 24px;border-radius:8px;text-decoration:none">Activate access</a>
+          </div>
+          <p style="color:#64748b;font-size:13px;line-height:1.6;margin:0">
+            This link expires in 48 hours and can only be used once.
+          </p>
+        `,
+      });
+
+      const emailResult = await sendMailgunEmail({
+        to: email,
+        subject: 'You’ve been invited to NexFrontier’s Investor Data Room',
+        html: emailHtml,
+      });
+
+      if (emailResult.sent) {
+        return new Response(
+          JSON.stringify({ ok: true, message: 'Invitation sent.', investorId, isTestInvestor }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
 
       return new Response(
         JSON.stringify({
           ok: true,
-          message: 'DEV MANUAL DELIVERY — Test investor invitation issued.',
+          message: 'DEV MANUAL DELIVERY — invitation issued.',
           devActivationUrl: activationUrl,
-          devWarning: 'This activation URL contains a secret. Share only with the intended test recipient. It expires 48 hours after issue and will not be shown again.',
+          devWarning: 'This activation URL contains a secret. Share only with the intended recipient. It expires 48 hours after issue and will not be shown again.',
+          emailDeliveryError: emailResult.error,
           investorId,
-          isTestInvestor: true,
+          isTestInvestor,
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
@@ -695,10 +725,9 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      // Check if this is a test investor
       const { data: investor } = await supabase
         .from('drm_investors')
-        .select('is_test_investor')
+        .select('name, email, is_test_investor')
         .eq('id', investorId)
         .maybeSingle();
 
@@ -728,17 +757,18 @@ Deno.serve(async (req: Request) => {
           );
         }
 
-        return new Response(
-          JSON.stringify({
-            ok: false,
-            code: 'EMAIL_DELIVERY_NOT_CONFIGURED',
-            message: 'Email delivery is not configured. Fresh links for non-test investors cannot be issued.',
-          }),
-          { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-        );
+        if (!Deno.env.get('MAILGUN_API_KEY')) {
+          return new Response(
+            JSON.stringify({
+              ok: false,
+              code: 'EMAIL_DELIVERY_NOT_CONFIGURED',
+              message: 'Email delivery is not configured. Fresh links for non-test investors cannot be issued.',
+            }),
+            { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          );
+        }
       }
 
-      // --- Test investor path ---
       const previousTokensInvalidated = await supabase
         .from('drm_access_tokens')
         .update({ is_valid: false, invalidated_at: new Date().toISOString() })
@@ -774,7 +804,7 @@ Deno.serve(async (req: Request) => {
         admin_id: adminId,
         investor_id: investorId,
         event_type: 're_invitation_sent',
-        event_detail: { is_test: true },
+        event_detail: { is_test: investor.is_test_investor },
       });
 
       await supabase.from('drm_audit_events').insert({
@@ -785,19 +815,50 @@ Deno.serve(async (req: Request) => {
           reason: 'fresh_link',
           expires_in_hours: 48,
           previous_token_invalidated: previousTokensInvalidated.count !== null,
-          is_test: true,
+          is_test: investor.is_test_investor,
         },
       });
 
       const baseUrl = Deno.env.get('PUBLIC_SITE_URL') || 'https://v5-nexfrontier-green-hz85.bolt.host';
       const activationUrl = `${baseUrl}/investor-data-room?token=${inviteToken}`;
 
+      const emailHtml = emailTemplate({
+        eyebrow: 'NexFrontier · Investor Data Room',
+        heading: 'Your fresh activation link',
+        bodyHtml: `
+          <p style="color:#94a3b8;font-size:14px;line-height:1.7;margin:0 0 20px">Hi ${investor.name},</p>
+          <p style="color:#94a3b8;font-size:14px;line-height:1.7;margin:0 0 20px">
+            Here's a fresh link to activate your access to NexFrontier's Investor Data Room.
+          </p>
+          <div style="margin:0 0 24px">
+            <a href="${activationUrl}" style="display:inline-block;background:#22d3ee;color:#0a0f1a;font-weight:600;padding:12px 24px;border-radius:8px;text-decoration:none">Activate access</a>
+          </div>
+          <p style="color:#64748b;font-size:13px;line-height:1.6;margin:0">
+            This link expires in 48 hours and can only be used once.
+          </p>
+        `,
+      });
+
+      const emailResult = await sendMailgunEmail({
+        to: investor.email,
+        subject: 'Your NexFrontier Investor Data Room activation link',
+        html: emailHtml,
+      });
+
+      if (emailResult.sent) {
+        return new Response(
+          JSON.stringify({ ok: true, message: 'Fresh activation link sent.' }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
       return new Response(
         JSON.stringify({
           ok: true,
-          message: 'DEV MANUAL DELIVERY — Fresh activation link issued for test investor.',
+          message: 'DEV MANUAL DELIVERY — Fresh activation link issued.',
           devActivationUrl: activationUrl,
-          devWarning: 'This activation URL contains a secret. Share only with the intended test recipient. It expires 48 hours after issue and will not be shown again.',
+          devWarning: 'This activation URL contains a secret. Share only with the intended recipient. It expires 48 hours after issue and will not be shown again.',
+          emailDeliveryError: emailResult.error,
         }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
