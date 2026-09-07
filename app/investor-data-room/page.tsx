@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { InvestorDataRoom } from '@/components/InvestorDataRoom';
+import { InvestorDataRoomV2 } from '@/components/InvestorDataRoomV2';
 
 export const metadata: Metadata = {
   title: 'Data Room',
@@ -7,5 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function InvestorDataRoomPage() {
-  return <InvestorDataRoom />;
+  return <InvestorDataRoomV2 />;
 }
