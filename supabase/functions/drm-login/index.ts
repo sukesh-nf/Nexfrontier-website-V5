@@ -1,5 +1,6 @@
 // verify_jwt: true (platform-level JWT gate enabled)
 import { createClient } from 'npm:@supabase/supabase-js@2.57.4';
+import { sendMailgunEmail, otpEmailHtml } from '../_shared/mailgun.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -45,14 +46,71 @@ async function pbkdf2Verify(passphrase: string, storedHash: string): Promise<boo
   return timingSafeEqual(derivedHex, expectedHash);
 }
 
+function generateOtpCode(): string {
+  const bytes = new Uint8Array(4);
+  crypto.getRandomValues(bytes);
+  const num = new DataView(bytes.buffer).getUint32(0) % 1000000;
+  return num.toString().padStart(6, '0');
+}
+
 // Fixed dummy hash to equalize timing on non-existent / inactive accounts
 const DUMMY_HASH = 'pbkdf2:600000:e8a6c002e2a402b09d2cc7378ab819ed:8b5440fa2318f1a1d4a28c4b040f04feb762c16cc15b6dc373e27c889fa8aa3e';
 
 // Session duration: 8 hours
 const SESSION_DURATION_MS = 8 * 60 * 60 * 1000;
-// Brute-force protection
+// Brute-force protection on passphrase
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCK_DURATION_MS = 15 * 60 * 1000;
+// Second-factor OTP settings
+const OTP_EXPIRY_MS = 10 * 60 * 1000;
+const MAX_OTP_ATTEMPTS = 5;
+
+async function issueSession(supabase: ReturnType<typeof createClient>, investor: { id: string; name: string; email: string; nda_signed: boolean; access_level: number }) {
+  const sessionToken = crypto.randomUUID();
+  const sessionHash = await sha256(sessionToken);
+
+  await supabase.from('drm_access_tokens').insert({
+    investor_id: investor.id,
+    token_hash: sessionHash,
+    token_type: 'session',
+    expires_at: new Date(Date.now() + SESSION_DURATION_MS).toISOString(),
+    is_valid: true,
+  });
+
+  await supabase.from('drm_activity_log').insert({
+    investor_id: investor.id,
+    event_type: 'login',
+    event_detail: { method: 'return_visitor' },
+  });
+  await supabase.from('drm_audit_events').insert({
+    event_type: 'LOGIN_SUCCESS',
+    investor_id: investor.id,
+    event_metadata: { method: 'return_visitor' },
+  });
+
+  const sessionId = crypto.randomUUID();
+  await supabase.from('drm_analytics_events').insert({
+    investor_id: investor.id,
+    event_type: 'session_start',
+    session_id: sessionId,
+  });
+
+  return new Response(
+    JSON.stringify({
+      ok: true,
+      investor: {
+        id: investor.id,
+        name: investor.name,
+        email: investor.email,
+        nda_signed: investor.nda_signed,
+        access_level: investor.access_level,
+      },
+      sessionToken,
+      sessionId,
+    }),
+    { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+  );
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -65,7 +123,92 @@ Deno.serve(async (req: Request) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
+    const url = new URL(req.url);
+    const action = url.searchParams.get('action') || 'login';
     const body = await req.json();
+
+    const GENERIC_FAIL = 'Invalid email or passphrase.';
+    const GENERIC_OTP_FAIL = 'Invalid or expired code. Please log in again.';
+
+    // ============================================================
+    // STEP 2: VERIFY OTP — completes login, issues the real session
+    // ============================================================
+    if (action === 'verify-otp') {
+      const email = String(body.email ?? '').trim().toLowerCase();
+      const otp = String(body.otp ?? '').trim();
+
+      if (!email || !otp) {
+        return new Response(
+          JSON.stringify({ ok: false, message: 'Email and code are required.' }),
+          { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      const { data: investor } = await supabase
+        .from('drm_investors')
+        .select('id, name, email, nda_signed, access_level, status')
+        .eq('email', email)
+        .maybeSingle();
+
+      if (!investor || investor.status !== 'active') {
+        return new Response(
+          JSON.stringify({ ok: false, message: GENERIC_OTP_FAIL }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      const { data: otpRow } = await supabase
+        .from('drm_login_otp')
+        .select('id, code_hash, attempts, expires_at, used_at')
+        .eq('investor_id', investor.id)
+        .is('used_at', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!otpRow) {
+        return new Response(
+          JSON.stringify({ ok: false, message: GENERIC_OTP_FAIL }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      if (new Date(otpRow.expires_at) < new Date()) {
+        await supabase.from('drm_login_otp').update({ used_at: new Date().toISOString() }).eq('id', otpRow.id);
+        return new Response(
+          JSON.stringify({ ok: false, code: 'OTP_EXPIRED', message: 'This code has expired. Please log in again.' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      if (otpRow.attempts >= MAX_OTP_ATTEMPTS) {
+        await supabase.from('drm_login_otp').update({ used_at: new Date().toISOString() }).eq('id', otpRow.id);
+        return new Response(
+          JSON.stringify({ ok: false, code: 'OTP_LOCKED', message: 'Too many incorrect attempts. Please log in again.' }),
+          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      const providedHash = await sha256(otp);
+      const isMatch = timingSafeEqual(providedHash, otpRow.code_hash);
+
+      if (!isMatch) {
+        await supabase.from('drm_login_otp').update({ attempts: otpRow.attempts + 1 }).eq('id', otpRow.id);
+        return new Response(
+          JSON.stringify({ ok: false, message: GENERIC_OTP_FAIL }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
+      await supabase.from('drm_login_otp').update({ used_at: new Date().toISOString() }).eq('id', otpRow.id);
+
+      return await issueSession(supabase, investor as { id: string; name: string; email: string; nda_signed: boolean; access_level: number });
+    }
+
+    // ============================================================
+    // STEP 1: PASSPHRASE CHECK — on success, issues an OTP instead
+    // of a session directly
+    // ============================================================
     const email = String(body.email ?? '').trim().toLowerCase();
     const passphrase = String(body.passphrase ?? '').trim();
 
@@ -76,15 +219,11 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Fetch investor by email — include passphrase_hash for verification
     const { data: investor, error: invError } = await supabase
       .from('drm_investors')
       .select('id, name, email, nda_signed, access_level, status, passphrase_hash, failed_login_attempts, locked_until')
       .eq('email', email)
       .maybeSingle();
-
-    // Generic error — do not disclose whether the email exists
-    const GENERIC_FAIL = 'Invalid email or passphrase.';
 
     if (invError || !investor || !investor.passphrase_hash) {
       await pbkdf2Verify(passphrase, DUMMY_HASH);
@@ -94,7 +233,6 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Check lifecycle status — provide precise denial messages
     if (investor.status === 'suspended') {
       await supabase.from('drm_audit_events').insert({
         event_type: 'LOGIN_DENIED_STATUS',
@@ -133,7 +271,6 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Check if account is locked
     if (investor.locked_until && new Date(investor.locked_until) > new Date()) {
       return new Response(
         JSON.stringify({ ok: false, message: 'Too many failed attempts. Please try again later.' }),
@@ -141,15 +278,11 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // A lock that has already elapsed clears the failure counter, so an attacker
-    // cannot keep an account permanently locked with one attempt per window.
     const priorAttempts = investor.locked_until ? 0 : (investor.failed_login_attempts || 0);
 
-    // Verify passphrase using PBKDF2
     const isMatch = await pbkdf2Verify(passphrase, investor.passphrase_hash);
 
     if (!isMatch) {
-      // Increment failed attempts
       const newAttemptCount = priorAttempts + 1;
       const shouldLock = newAttemptCount >= MAX_FAILED_ATTEMPTS;
 
@@ -167,7 +300,6 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Reset failed attempts on successful login
     await supabase
       .from('drm_investors')
       .update({
@@ -177,50 +309,56 @@ Deno.serve(async (req: Request) => {
       })
       .eq('id', investor.id);
 
-    // Generate short-lived session token (8 hours)
-    const sessionToken = crypto.randomUUID();
-    const sessionHash = await sha256(sessionToken);
+    // Passphrase correct — issue a second-factor OTP rather than a session directly.
+    // Kill any previous unused codes for this investor first.
+    await supabase
+      .from('drm_login_otp')
+      .update({ used_at: new Date().toISOString() })
+      .eq('investor_id', investor.id)
+      .is('used_at', null);
 
-    await supabase.from('drm_access_tokens').insert({
+    const otpCode = generateOtpCode();
+    const otpHash = await sha256(otpCode);
+
+    await supabase.from('drm_login_otp').insert({
       investor_id: investor.id,
-      token_hash: sessionHash,
-      token_type: 'session',
-      expires_at: new Date(Date.now() + SESSION_DURATION_MS).toISOString(),
-      is_valid: true,
+      code_hash: otpHash,
+      expires_at: new Date(Date.now() + OTP_EXPIRY_MS).toISOString(),
     });
 
-    // Log login
-    await supabase.from('drm_activity_log').insert({
-      investor_id: investor.id,
-      event_type: 'login',
-      event_detail: { method: 'return_visitor' },
-    });
     await supabase.from('drm_audit_events').insert({
-      event_type: 'LOGIN_SUCCESS',
+      event_type: 'LOGIN_OTP_ISSUED',
       investor_id: investor.id,
       event_metadata: { method: 'return_visitor' },
     });
 
-    // Log analytics session start
-    const sessionId = crypto.randomUUID();
-    await supabase.from('drm_analytics_events').insert({
-      investor_id: investor.id,
-      event_type: 'session_start',
-      session_id: sessionId,
+    const emailHtml = otpEmailHtml({ name: investor.name, code: otpCode });
+    const emailResult = await sendMailgunEmail({
+      to: investor.email,
+      subject: 'Your NexFrontier sign-in code',
+      html: emailHtml,
     });
 
+    if (emailResult.sent) {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          otpRequired: true,
+          message: 'A sign-in code has been sent to your email.',
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    // Email not sent (key not configured yet, or delivery failed) — dev manual delivery
     return new Response(
       JSON.stringify({
         ok: true,
-        investor: {
-          id: investor.id,
-          name: investor.name,
-          email: investor.email,
-          nda_signed: investor.nda_signed,
-          access_level: investor.access_level,
-        },
-        sessionToken,
-        sessionId,
+        otpRequired: true,
+        message: 'DEV MANUAL DELIVERY — sign-in code generated below.',
+        devOtpCode: otpCode,
+        devWarning: 'This code is sensitive. It expires in 10 minutes and can only be used once.',
+        emailDeliveryError: emailResult.error,
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
@@ -231,4 +369,4 @@ Deno.serve(async (req: Request) => {
     );
   }
 });
-// v5 pbkdf2 600k timing-safe + secure salt + dummy verify
+// v5 pbkdf2 600k timing-safe + secure salt + dummy verify + email OTP second factor

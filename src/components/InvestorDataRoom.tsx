@@ -251,7 +251,7 @@ export function InvestorDataRoom() {
 // ============================================================
 // Secure Access Screen
 // ============================================================
-type AccessMode = 'menu' | 'token' | 'request' | 'return-login' | 'admin-login';
+type AccessMode = 'menu' | 'token' | 'request' | 'return-login' | 'return-login-otp' | 'admin-login';
 
 function SecureAccessScreen({
   onInvestorActivated,
@@ -267,6 +267,8 @@ function SecureAccessScreen({
   const [passphrase, setPassphrase] = useState('');
   const [email, setEmail] = useState('');
   const [returnPassphrase, setReturnPassphrase] = useState('');
+  const [otpCode, setOtpCode] = useState('');
+  const [otpNotice, setOtpNotice] = useState('');
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPass, setAdminPass] = useState('');
   const [reqForm, setReqForm] = useState({ name: '', email: '', phone: '', organisation: '', role: '', message: '' });
@@ -299,10 +301,30 @@ function SecureAccessScreen({
       const data = await apiCall('drm-login', {
         method: 'POST',
         body: JSON.stringify({ email, passphrase: returnPassphrase }),
+      }) as { ok: boolean; otpRequired?: boolean; message?: string; devOtpCode?: string };
+      if (data.otpRequired) {
+        setOtpNotice(data.devOtpCode ? `DEV MODE — your code is ${data.devOtpCode}` : (data.message || 'A sign-in code has been sent to your email.'));
+        setMode('return-login-otp');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Login failed.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      const data = await apiCall('drm-login?action=verify-otp', {
+        method: 'POST',
+        body: JSON.stringify({ email, otp: otpCode }),
       }) as { ok: boolean; investor: Investor; sessionToken: string; sessionId: string };
       onReturnLogin(data.sessionToken);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed.');
+      setError(err instanceof Error ? err.message : 'Code verification failed.');
     } finally {
       setLoading(false);
     }
@@ -451,6 +473,22 @@ function SecureAccessScreen({
                 {loading ? 'Logging in...' : 'Log in'} <ArrowRight size={16} />
               </button>
               <button type="button" onClick={() => { setMode('menu'); setError(''); }} style={{ background: 'none', border: 'none', color: 'var(--nf-text-tertiary)', fontSize: '0.8125rem', cursor: 'pointer', padding: '4px' }}>Back</button>
+            </form>
+          )}
+
+          {mode === 'return-login-otp' && (
+            <form onSubmit={handleVerifyOtp} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--nf-space-5)' }}>
+              <div>
+                <label style={labelStyle}>Sign-in code</label>
+                <p style={{ fontSize: '0.8125rem', color: 'var(--nf-text-tertiary)', marginBottom: '10px' }}>{otpNotice}</p>
+                <input type="text" inputMode="numeric" maxLength={6} value={otpCode} onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))} style={{ ...inputStyle, letterSpacing: '0.3em', fontSize: '1.25rem', textAlign: 'center' }} placeholder="000000" autoFocus />
+                <p style={{ fontSize: '0.75rem', color: 'var(--nf-text-tertiary)', marginTop: '4px' }}>This code expires in 10 minutes.</p>
+              </div>
+              {error && <p style={{ fontSize: '0.875rem', color: 'var(--nf-negative)' }}>{error}</p>}
+              <button type="submit" disabled={loading || otpCode.length !== 6} style={{ ...btnStyle, opacity: loading || otpCode.length !== 6 ? 0.4 : 1, cursor: loading || otpCode.length !== 6 ? 'not-allowed' : 'pointer' }}>
+                {loading ? 'Verifying...' : 'Verify and log in'} <ArrowRight size={16} />
+              </button>
+              <button type="button" onClick={() => { setMode('return-login'); setOtpCode(''); setError(''); }} style={{ background: 'none', border: 'none', color: 'var(--nf-text-tertiary)', fontSize: '0.8125rem', cursor: 'pointer', padding: '4px' }}>Back</button>
             </form>
           )}
 
